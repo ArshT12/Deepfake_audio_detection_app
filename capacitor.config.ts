@@ -18,7 +18,8 @@ const config: CapacitorConfig = {
     },
     Permissions: {
       phone: true,
-      microphone: true
+      microphone: true,
+      notifications: true
     }
   }
 };
