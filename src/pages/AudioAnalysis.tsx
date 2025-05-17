@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import Header from '../components/Header';
@@ -24,7 +23,7 @@ const AudioAnalysis: React.FC = () => {
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [activeTab, setActiveTab] = useState('monitor');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const analysisIntervalRef = useRef<number | null>(null);
 
   // Call monitor initialization
   useEffect(() => {
@@ -97,7 +96,7 @@ const AudioAnalysis: React.FC = () => {
       
       // Setup interval to analyze chunks periodically (every X seconds)
       const intervalTime = settings.analysisDuration * 1000;
-      analysisIntervalRef.current = setInterval(() => {
+      analysisIntervalRef.current = window.setInterval(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           // Stop current recording to trigger ondataavailable and onstop
           mediaRecorderRef.current.stop();
@@ -146,12 +145,7 @@ const AudioAnalysis: React.FC = () => {
     setIsAnalyzing(true);
     
     try {
-      // Convert Blob to File if necessary
-      const audioFile = audioData instanceof File 
-        ? audioData 
-        : new File([audioData], "recorded-audio.wav", { type: "audio/wav" });
-      
-      const result = await deepfakeApi.detectAudio(audioFile);
+      const result = await deepfakeApi.detectAudio(audioData);
       
       setDetectionResult({
         isDeepfake: result.isDeepfake,

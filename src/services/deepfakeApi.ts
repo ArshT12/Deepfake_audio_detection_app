@@ -1,7 +1,5 @@
 
 import axios from 'axios';
-import { Platform } from 'react-native';
-import RNFS from 'react-native-fs';
 
 const API_URL = 'https://huggingface.co/spaces/ArshTandon/deepfake-detection-api';
 
@@ -14,34 +12,20 @@ export type DetectionResult = {
 export const deepfakeApi = {
   /**
    * Send audio file to the Hugging Face API for deepfake detection
-   * @param audioPath - Path to audio file for analysis
+   * @param audioPath - Audio file for analysis (File object or Blob)
    * @returns Detection result with confidence score
    */
-  async detectAudio(audioPath: string): Promise<DetectionResult> {
+  async detectAudio(audioFile: File | Blob): Promise<DetectionResult> {
     try {
-      // Read the file content
-      let fileContent;
-      let fileName;
-      
-      if (Platform.OS === 'android' || Platform.OS === 'ios') {
-        // For native platforms, we need to use the file system module
-        if (!(await RNFS.exists(audioPath))) {
-          throw new Error(`File does not exist: ${audioPath}`);
-        }
-        
-        fileName = audioPath.split('/').pop() || 'audio.wav';
-        fileContent = await RNFS.readFile(audioPath, 'base64');
-      } else {
-        throw new Error('Unsupported platform');
-      }
-      
       // Create form data for API request
       const formData = new FormData();
-      formData.append('audio', {
-        uri: Platform.OS === 'android' ? `file://${audioPath}` : audioPath,
-        type: 'audio/wav',
-        name: fileName,
-      });
+      
+      // If it's a File object, use it directly, otherwise create a new File from the Blob
+      const file = audioFile instanceof File 
+        ? audioFile 
+        : new File([audioFile], 'audio.wav', { type: 'audio/wav' });
+      
+      formData.append('audio', file);
 
       // Make the API call
       const response = await axios.post(API_URL, formData, {
@@ -92,36 +76,12 @@ export const deepfakeApi = {
   },
   
   /**
-   * Convert recorded audio blob to a file path for React Native
+   * Convert recorded audio blob to a URL for web preview
    * @param audioData - Audio data as Blob
-   * @returns Path to saved audio file
+   * @returns URL to access the audio
    */
-  async saveAudioFile(audioData: Blob): Promise<string> {
-    try {
-      // Create a temporary file path
-      const filePath = `${RNFS.CachesDirectoryPath}/recorded_audio_${Date.now()}.wav`;
-      
-      // Convert Blob to base64
-      const fileReaderInstance = new FileReader();
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        fileReaderInstance.onload = () => {
-          if (fileReaderInstance.result) {
-            const base64 = fileReaderInstance.result.toString().split(',')[1];
-            resolve(base64);
-          } else {
-            reject(new Error('Failed to read file data'));
-          }
-        };
-        fileReaderInstance.readAsDataURL(audioData);
-      });
-      
-      // Write the file to the file system
-      await RNFS.writeFile(filePath, base64Data, 'base64');
-      
-      return filePath;
-    } catch (error) {
-      console.error('Error saving audio file:', error);
-      throw error;
-    }
+  saveAudioFile(audioData: Blob): string {
+    // Create a URL for the blob that can be used in an audio element
+    return URL.createObjectURL(audioData);
   }
 };

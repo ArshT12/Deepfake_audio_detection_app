@@ -1,6 +1,5 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Detection, UserSettings } from '../types';
 
 type AppContextType = {
@@ -26,16 +25,16 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [detections, setDetections] = useState<Detection[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
 
-  // Load saved data from AsyncStorage on initial load
+  // Load saved data from localStorage on initial load
   useEffect(() => {
-    const loadSavedData = async () => {
+    const loadSavedData = () => {
       try {
-        const savedDetections = await AsyncStorage.getItem('detections');
+        const savedDetections = localStorage.getItem('detections');
         if (savedDetections) {
           setDetections(JSON.parse(savedDetections));
         }
 
-        const savedSettings = await AsyncStorage.getItem('settings');
+        const savedSettings = localStorage.getItem('settings');
         if (savedSettings) {
           setSettings(JSON.parse(savedSettings));
         }
@@ -47,11 +46,11 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     loadSavedData();
   }, []);
 
-  // Save data to AsyncStorage when it changes
+  // Save data to localStorage when it changes
   useEffect(() => {
-    const saveDetections = async () => {
+    const saveDetections = () => {
       try {
-        await AsyncStorage.setItem('detections', JSON.stringify(detections));
+        localStorage.setItem('detections', JSON.stringify(detections));
       } catch (error) {
         console.error('Error saving detections:', error);
       }
@@ -61,9 +60,9 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   }, [detections]);
 
   useEffect(() => {
-    const saveSettings = async () => {
+    const saveSettings = () => {
       try {
-        await AsyncStorage.setItem('settings', JSON.stringify(settings));
+        localStorage.setItem('settings', JSON.stringify(settings));
       } catch (error) {
         console.error('Error saving settings:', error);
       }

@@ -1,26 +1,5 @@
 
-import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
-
-const LINKING_ERROR =
-  `The package 'voice-guardian-shield' doesn't seem to be linked. Make sure: \n\n` +
-  Platform.select({ ios: "- You have run 'pod install'\n", default: '' }) +
-  '- You rebuilt the app after installing the package\n' +
-  '- You are not using Expo Go\n';
-
-// Get the native module
-const CallMonitorModule = NativeModules.CallMonitorModule
-  ? NativeModules.CallMonitorModule
-  : new Proxy(
-      {},
-      {
-        get() {
-          throw new Error(LINKING_ERROR);
-        },
-      }
-    );
-
-// Create an event emitter for native events
-const callMonitorEventEmitter = new NativeEventEmitter(CallMonitorModule);
+// Web-compatible implementation of the call monitor
 
 // Call state constants
 export enum CallState {
@@ -38,24 +17,20 @@ export interface CallInfo {
 }
 
 /**
- * JavaScript interface for the native call monitor
+ * JavaScript interface for call monitoring (web implementation)
  */
 class CallMonitor {
   private isInitialized = false;
   private isMonitoring = false;
-  private eventSubscription: any = null;
   private callListeners: ((callInfo: CallInfo) => void)[] = [];
+  private simulatedCallInterval: number | null = null;
 
   /**
    * Check if call monitoring is available on this device
    */
   async isAvailable(): Promise<boolean> {
-    try {
-      return await CallMonitorModule.isAvailable();
-    } catch (error) {
-      console.error('Error checking call monitor availability:', error);
-      return false;
-    }
+    // In web environment, we'll simulate call monitoring
+    return true;
   }
 
   /**
@@ -64,9 +39,13 @@ class CallMonitor {
    */
   async requestPermissions(): Promise<boolean> {
     try {
-      return await CallMonitorModule.requestPermissions();
+      // For web, we'll request microphone permission as a proxy
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the stream right away, we just needed permission
+      stream.getTracks().forEach(track => track.stop());
+      return true;
     } catch (error) {
-      console.error('Error requesting call monitor permissions:', error);
+      console.error('Error requesting audio permissions:', error);
       return false;
     }
   }
@@ -76,31 +55,12 @@ class CallMonitor {
    */
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
-
-    try {
-      const available = await this.isAvailable();
-      if (!available) {
-        console.log('Call monitoring not available on this device');
-        return false;
-      }
-
-      const hasPermissions = await this.requestPermissions();
-      if (!hasPermissions) {
-        console.log('Call monitoring permissions not granted');
-        return false;
-      }
-
-      const result = await CallMonitorModule.initialize();
-      this.isInitialized = result;
-      return result;
-    } catch (error) {
-      console.error('Error initializing call monitor:', error);
-      return false;
-    }
+    this.isInitialized = true;
+    return true;
   }
 
   /**
-   * Start monitoring calls
+   * Start monitoring calls (simulated in web environment)
    */
   async startMonitoring(): Promise<boolean> {
     if (!this.isInitialized) {
@@ -111,17 +71,16 @@ class CallMonitor {
     if (this.isMonitoring) return true;
 
     try {
-      // Setup event listener before starting the monitor
-      if (!this.eventSubscription) {
-        this.eventSubscription = callMonitorEventEmitter.addListener(
-          'CallStateChanged',
-          this.handleCallStateChanged
-        );
-      }
-
-      const result = await CallMonitorModule.startMonitoring();
-      this.isMonitoring = result;
-      return result;
+      // In web environment, we'll occasionally simulate incoming calls
+      this.simulatedCallInterval = window.setInterval(() => {
+        // 5% chance of simulating a call every 60 seconds
+        if (Math.random() < 0.05) {
+          this.startDemoCall();
+        }
+      }, 60000); // Check every minute
+      
+      this.isMonitoring = true;
+      return true;
     } catch (error) {
       console.error('Error starting call monitoring:', error);
       return false;
@@ -135,16 +94,13 @@ class CallMonitor {
     if (!this.isMonitoring) return true;
 
     try {
-      const result = await CallMonitorModule.stopMonitoring();
-      
-      // Remove the event listener
-      if (this.eventSubscription) {
-        this.eventSubscription.remove();
-        this.eventSubscription = null;
+      if (this.simulatedCallInterval !== null) {
+        clearInterval(this.simulatedCallInterval);
+        this.simulatedCallInterval = null;
       }
       
       this.isMonitoring = false;
-      return result;
+      return true;
     } catch (error) {
       console.error('Error stopping call monitoring:', error);
       return false;
@@ -166,35 +122,19 @@ class CallMonitor {
   }
 
   /**
-   * Handle call state changes from native code
-   */
-  private handleCallStateChanged = (event: any) => {
-    const callInfo: CallInfo = {
-      phoneNumber: event.phoneNumber || 'Unknown',
-      isIncoming: event.isIncoming || false,
-      timestamp: event.timestamp || Date.now(),
-      state: event.state || CallState.IDLE
-    };
-
-    // Notify all listeners
-    this.callListeners.forEach(listener => listener(callInfo));
-  };
-
-  /**
-   * Start a simulated call for demo purposes when running on simulators
-   * or when permissions are not available
+   * Start a simulated call for demo purposes
    */
   startDemoCall(): CallInfo {
-    const generateAustralianPhoneNumber = (): string => {
-      // Australian mobile numbers start with 04
-      const prefix = '04';
-      // Generate 8 more random digits
-      const randomPart = Math.floor(Math.random() * 100000000).toString().padStart(8, '0');
-      // Format as 04XX XXX XXX
-      return `${prefix}${randomPart.substring(0, 2)} ${randomPart.substring(2, 5)} ${randomPart.substring(5, 8)}`;
+    const generatePhoneNumber = (): string => {
+      // Generate a random phone number
+      const prefix = '+1';
+      // Generate 10 random digits
+      const randomPart = Math.floor(Math.random() * 10000000000).toString().padStart(10, '0');
+      // Format as +1 (XXX) XXX-XXXX
+      return `${prefix} (${randomPart.substring(0, 3)}) ${randomPart.substring(3, 6)}-${randomPart.substring(6, 10)}`;
     };
 
-    const phoneNumber = generateAustralianPhoneNumber();
+    const phoneNumber = generatePhoneNumber();
     const isIncoming = Math.random() > 0.3; // 70% chance of incoming call
     
     const callInfo: CallInfo = {
@@ -214,27 +154,26 @@ class CallMonitor {
         state: CallState.OFFHOOK
       };
       this.callListeners.forEach(listener => listener(offhookInfo));
+      
+      // After a longer delay, end the call
+      setTimeout(() => {
+        const disconnectedInfo = {
+          ...callInfo,
+          state: CallState.DISCONNECTED
+        };
+        this.callListeners.forEach(listener => listener(disconnectedInfo));
+      }, 10000 + Math.random() * 20000); // Call duration between 10-30 seconds
     }, 2000);
     
     return callInfo;
   }
 
   /**
-   * End a call (only works on some Android devices)
-   * On iOS this is not supported due to system limitations
+   * End a call (simulated in web environment)
    */
   async endCall(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'android') {
-        return await CallMonitorModule.endCall();
-      } else {
-        console.log('Ending calls not supported on this platform');
-        return false;
-      }
-    } catch (error) {
-      console.error('Error ending call:', error);
-      return false;
-    }
+    console.log('Simulated ending call in web environment');
+    return true;
   }
 }
 
