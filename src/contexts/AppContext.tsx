@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Detection, UserSettings } from '../types';
 
 type AppContextType = {
@@ -25,30 +26,50 @@ export const AppProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [detections, setDetections] = useState<Detection[]>([]);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
 
-  // Load saved data from localStorage on initial load
+  // Load saved data from AsyncStorage on initial load
   useEffect(() => {
-    try {
-      const savedDetections = localStorage.getItem('detections');
-      if (savedDetections) {
-        setDetections(JSON.parse(savedDetections));
-      }
+    const loadSavedData = async () => {
+      try {
+        const savedDetections = await AsyncStorage.getItem('detections');
+        if (savedDetections) {
+          setDetections(JSON.parse(savedDetections));
+        }
 
-      const savedSettings = localStorage.getItem('settings');
-      if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+        const savedSettings = await AsyncStorage.getItem('settings');
+        if (savedSettings) {
+          setSettings(JSON.parse(savedSettings));
+        }
+      } catch (error) {
+        console.error('Error loading saved data:', error);
       }
-    } catch (error) {
-      console.error('Error loading saved data:', error);
-    }
+    };
+    
+    loadSavedData();
   }, []);
 
-  // Save data to localStorage when it changes
+  // Save data to AsyncStorage when it changes
   useEffect(() => {
-    localStorage.setItem('detections', JSON.stringify(detections));
+    const saveDetections = async () => {
+      try {
+        await AsyncStorage.setItem('detections', JSON.stringify(detections));
+      } catch (error) {
+        console.error('Error saving detections:', error);
+      }
+    };
+    
+    saveDetections();
   }, [detections]);
 
   useEffect(() => {
-    localStorage.setItem('settings', JSON.stringify(settings));
+    const saveSettings = async () => {
+      try {
+        await AsyncStorage.setItem('settings', JSON.stringify(settings));
+      } catch (error) {
+        console.error('Error saving settings:', error);
+      }
+    };
+    
+    saveSettings();
   }, [settings]);
 
   const addDetection = (detection: Omit<Detection, 'id' | 'timestamp'>) => {

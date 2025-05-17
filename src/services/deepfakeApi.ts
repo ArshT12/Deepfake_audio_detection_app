@@ -1,5 +1,7 @@
 
 import axios from 'axios';
+import { Platform } from 'react-native';
+import RNFS from 'react-native-fs';
 
 const API_URL = 'https://huggingface.co/spaces/ArshTandon/deepfake-detection-api';
 
@@ -12,15 +14,36 @@ export type DetectionResult = {
 export const deepfakeApi = {
   /**
    * Send audio file to the Hugging Face API for deepfake detection
-   * @param audioFile - Audio file for analysis
+   * @param audioPath - Path to audio file for analysis
    * @returns Detection result with confidence score
    */
-  async detectAudio(audioFile: File | Blob): Promise<DetectionResult> {
+  async detectAudio(audioPath: string): Promise<DetectionResult> {
     try {
+      // Read the file content
+      let fileContent;
+      let fileName;
+      
+      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        // For native platforms, we need to use the file system module
+        if (!(await RNFS.exists(audioPath))) {
+          throw new Error(`File does not exist: ${audioPath}`);
+        }
+        
+        fileName = audioPath.split('/').pop() || 'audio.wav';
+        fileContent = await RNFS.readFile(audioPath, 'base64');
+      } else {
+        throw new Error('Unsupported platform');
+      }
+      
+      // Create form data for API request
       const formData = new FormData();
-      formData.append('audio', audioFile);
+      formData.append('audio', {
+        uri: Platform.OS === 'android' ? `file://${audioPath}` : audioPath,
+        type: 'audio/wav',
+        name: fileName,
+      });
 
-      // Try to make the API call
+      // Make the API call
       const response = await axios.post(API_URL, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -65,6 +88,40 @@ export const deepfakeApi = {
         confidence: mockConfidence,
         rawResponse: mockResponse,
       };
+    }
+  },
+  
+  /**
+   * Convert recorded audio blob to a file path for React Native
+   * @param audioData - Audio data as Blob
+   * @returns Path to saved audio file
+   */
+  async saveAudioFile(audioData: Blob): Promise<string> {
+    try {
+      // Create a temporary file path
+      const filePath = `${RNFS.CachesDirectoryPath}/recorded_audio_${Date.now()}.wav`;
+      
+      // Convert Blob to base64
+      const fileReaderInstance = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        fileReaderInstance.onload = () => {
+          if (fileReaderInstance.result) {
+            const base64 = fileReaderInstance.result.toString().split(',')[1];
+            resolve(base64);
+          } else {
+            reject(new Error('Failed to read file data'));
+          }
+        };
+        fileReaderInstance.readAsDataURL(audioData);
+      });
+      
+      // Write the file to the file system
+      await RNFS.writeFile(filePath, base64Data, 'base64');
+      
+      return filePath;
+    } catch (error) {
+      console.error('Error saving audio file:', error);
+      throw error;
     }
   }
 };
