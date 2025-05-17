@@ -32,7 +32,7 @@ const Settings: React.FC = () => {
       
       <div className="flex-grow px-4 py-6 pb-24">
         <div className="guardian-card p-4 mb-6">
-          <h2 className="text-lg font-bold mb-4">Notifications</h2>
+          <h2 className="text-lg font-bold mb-4">Call Monitoring</h2>
           
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -54,23 +54,6 @@ const Settings: React.FC = () => {
               <Switch 
                 checked={settings.vibrateOnDeepfake} 
                 onCheckedChange={(checked) => updateSettings({ vibrateOnDeepfake: checked })}
-              />
-            </div>
-          </div>
-        </div>
-        
-        <div className="guardian-card p-4 mb-6">
-          <h2 className="text-lg font-bold mb-4">Call Actions</h2>
-          
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="font-medium">Auto-Record Deepfakes</p>
-                <p className="text-sm text-guardian-gray">Automatically record calls detected as deepfakes</p>
-              </div>
-              <Switch 
-                checked={settings.autoRecordOnDeepfake} 
-                onCheckedChange={(checked) => updateSettings({ autoRecordOnDeepfake: checked })}
               />
             </div>
             

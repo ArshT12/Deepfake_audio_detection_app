@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Phone, Settings, FileAudio } from 'lucide-react';
+import { Home, FileAudio, Settings } from 'lucide-react';
 
 const BottomNav: React.FC = () => {
   const location = useLocation();
@@ -22,19 +22,11 @@ const BottomNav: React.FC = () => {
         </NavLink>
         
         <NavLink 
-          to="/call-demo" 
-          className={`flex flex-col items-center py-1 px-3 ${isActive('/call-demo') ? 'text-guardian-blue' : 'text-gray-500'}`}
-        >
-          <Phone size={24} />
-          <span className="text-xs mt-1">Call Demo</span>
-        </NavLink>
-        
-        <NavLink 
-          to="/audio-analysis" 
-          className={`flex flex-col items-center py-1 px-3 ${isActive('/audio-analysis') ? 'text-guardian-blue' : 'text-gray-500'}`}
+          to="/dashboard" 
+          className={`flex flex-col items-center py-1 px-3 ${isActive('/dashboard') ? 'text-guardian-blue' : 'text-gray-500'}`}
         >
           <FileAudio size={24} />
-          <span className="text-xs mt-1">Analysis</span>
+          <span className="text-xs mt-1">History</span>
         </NavLink>
         
         <NavLink 

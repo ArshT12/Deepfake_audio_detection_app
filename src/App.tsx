@@ -6,11 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider } from "./contexts/AppContext";
 
-import Dashboard from "./pages/Dashboard";
-import CallDemo from "./pages/CallDemo";
+import AudioAnalysis from "./pages/AudioAnalysis"; // Now used as home page
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
-import AudioAnalysis from "./pages/AudioAnalysis"; // Add import for new page
+import Dashboard from "./pages/Dashboard"; // Keeping Dashboard but not as home
 
 const queryClient = new QueryClient();
 
@@ -22,10 +21,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/call-demo" element={<CallDemo />} />
+            <Route path="/" element={<AudioAnalysis />} /> {/* Make AudioAnalysis the home route */}
+            <Route path="/dashboard" element={<Dashboard />} /> {/* Keep Dashboard but as secondary */}
             <Route path="/settings" element={<Settings />} />
-            <Route path="/audio-analysis" element={<AudioAnalysis />} /> {/* Add new route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
