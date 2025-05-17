@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import CallDemo from "./pages/CallDemo";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import AudioAnalysis from "./pages/AudioAnalysis"; // Add import for new page
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/call-demo" element={<CallDemo />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/audio-analysis" element={<AudioAnalysis />} /> {/* Add new route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
