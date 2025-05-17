@@ -3,13 +3,18 @@ package com.voiceguardianshield;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
@@ -27,6 +32,7 @@ import com.facebook.react.modules.core.PermissionAwareActivity;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ShortBuffer;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,6 +46,10 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
     private boolean isRecording = false;
     private ExecutorService executor;
     private static final int PERMISSION_REQUEST_CODE = 100;
+    private boolean useFallbackMode = false;
+    private AudioManager audioManager;
+    
+    // Required permissions for direct call audio
     private static final String[] REQUIRED_PERMISSIONS = {
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.PROCESS_OUTGOING_CALLS,
@@ -50,11 +60,17 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
     private static final String[] CALL_LOG_PERMISSIONS = {
             Manifest.permission.READ_CALL_LOG
     };
+    
+    // Additional permissions for direct call audio (may not be granted on all devices)
+    private static final String[] DIRECT_AUDIO_PERMISSIONS = {
+            Manifest.permission.CAPTURE_AUDIO_OUTPUT
+    };
 
     public CallMonitorModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
         this.executor = Executors.newSingleThreadExecutor();
+        this.audioManager = (AudioManager) reactContext.getSystemService(Context.AUDIO_SERVICE);
     }
 
     @NonNull
@@ -91,6 +107,39 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
 
         promise.resolve(hasPermissions);
     }
+    
+    @ReactMethod
+    public void canAccessCallAudio(Promise promise) {
+        boolean canAccessDirectAudio = true;
+        
+        // Check if we have the special permission for direct call audio
+        for (String permission : DIRECT_AUDIO_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(reactContext, permission) != PackageManager.PERMISSION_GRANTED) {
+                canAccessDirectAudio = false;
+                break;
+            }
+        }
+        
+        // Also check if device supports voice call recording - many don't
+        boolean hasVoiceCallRecording = false;
+        for (int source : new int[]{MediaRecorder.AudioSource.VOICE_CALL, MediaRecorder.AudioSource.VOICE_COMMUNICATION}) {
+            try {
+                int minBufferSize = AudioRecord.getMinBufferSize(44100, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+                AudioRecord testRecorder = new AudioRecord(source, 44100, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBufferSize);
+                if (testRecorder.getState() == AudioRecord.STATE_INITIALIZED) {
+                    hasVoiceCallRecording = true;
+                    testRecorder.release();
+                    break;
+                }
+                testRecorder.release();
+            } catch (Exception e) {
+                // This source is not available
+            }
+        }
+        
+        // We need both permissions and hardware support
+        promise.resolve(canAccessDirectAudio && hasVoiceCallRecording);
+    }
 
     @ReactMethod
     public void requestPermissions(Promise promise) {
@@ -100,17 +149,13 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
             return;
         }
 
-        // Combine permissions based on Android version
-        String[] permissions;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            permissions = new String[REQUIRED_PERMISSIONS.length + CALL_LOG_PERMISSIONS.length];
-            System.arraycopy(REQUIRED_PERMISSIONS, 0, permissions, 0, REQUIRED_PERMISSIONS.length);
-            System.arraycopy(CALL_LOG_PERMISSIONS, 0, permissions, REQUIRED_PERMISSIONS.length, CALL_LOG_PERMISSIONS.length);
-        } else {
-            permissions = REQUIRED_PERMISSIONS;
-        }
-
-        activity.requestPermissions(permissions, PERMISSION_REQUEST_CODE, (requestCode, receivedPermissions, grantResults) -> {
+        // Combine all required permissions
+        String[] allPermissions = new String[REQUIRED_PERMISSIONS.length + CALL_LOG_PERMISSIONS.length + DIRECT_AUDIO_PERMISSIONS.length];
+        System.arraycopy(REQUIRED_PERMISSIONS, 0, allPermissions, 0, REQUIRED_PERMISSIONS.length);
+        System.arraycopy(CALL_LOG_PERMISSIONS, 0, allPermissions, REQUIRED_PERMISSIONS.length, CALL_LOG_PERMISSIONS.length);
+        System.arraycopy(DIRECT_AUDIO_PERMISSIONS, 0, allPermissions, REQUIRED_PERMISSIONS.length + CALL_LOG_PERMISSIONS.length, DIRECT_AUDIO_PERMISSIONS.length);
+        
+        activity.requestPermissions(allPermissions, PERMISSION_REQUEST_CODE, (requestCode, receivedPermissions, grantResults) -> {
             if (requestCode == PERMISSION_REQUEST_CODE) {
                 boolean allGranted = true;
                 for (int result : grantResults) {
@@ -151,13 +196,15 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void startMonitoring(Promise promise) {
+    public void startMonitoring(boolean useFallback, Promise promise) {
         if (isMonitoring) {
             promise.resolve(true);
             return;
         }
 
         try {
+            this.useFallbackMode = useFallback;
+            
             if (telephonyManager == null) {
                 initialize(new Promise() {
                     @Override
@@ -231,6 +278,38 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
             promise.reject("E_START_MONITORING_FAILED", e.getMessage());
         }
     }
+    
+    @ReactMethod
+    public void optimizeBackgroundMonitoring(boolean useFallback, Promise promise) {
+        // Implement any specific optimizations needed for background operation
+        // This might involve reducing audio quality, processing frequency, etc.
+        promise.resolve(true);
+    }
+    
+    @ReactMethod
+    public void refreshMonitoring(boolean useFallback, Promise promise) {
+        // Refresh monitoring when app comes to foreground
+        this.useFallbackMode = useFallback;
+        promise.resolve(true);
+    }
+    
+    @ReactMethod
+    public void promptLoudspeaker(Promise promise) {
+        // Turn on speakerphone if possible
+        try {
+            if (audioManager != null && !audioManager.isSpeakerphoneOn()) {
+                audioManager.setSpeakerphoneOn(true);
+                
+                // Show a toast to the user
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(reactContext, "Please keep speakerphone on for voice analysis", Toast.LENGTH_LONG).show();
+                });
+            }
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("E_SPEAKER_ERROR", e.getMessage());
+        }
+    }
 
     @ReactMethod
     public void stopMonitoring(Promise promise) {
@@ -246,6 +325,11 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
             
             if (isRecording) {
                 stopAudioRecording();
+            }
+            
+            // Turn off speakerphone if it was enabled
+            if (audioManager != null && audioManager.isSpeakerphoneOn()) {
+                audioManager.setSpeakerphoneOn(false);
             }
             
             isMonitoring = false;
@@ -265,6 +349,7 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
     private void handleCallStateChanged(int state, String phoneNumber) {
         WritableMap params = Arguments.createMap();
         params.putString("phoneNumber", phoneNumber != null ? phoneNumber : "Unknown");
+        params.putBoolean("usingDirectAudio", !useFallbackMode);
 
         switch (state) {
             case TelephonyManager.CALL_STATE_IDLE:
@@ -286,7 +371,7 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
                 params.putBoolean("isIncoming", false);
                 
                 // Start recording call audio
-                startAudioRecording();
+                startAudioRecording(useFallbackMode);
                 break;
         }
 
@@ -294,7 +379,7 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
         sendEvent("CallStateChanged", params);
     }
 
-    private void startAudioRecording() {
+    private void startAudioRecording(boolean useFallbackMode) {
         if (isRecording) return;
 
         executor.execute(() -> {
@@ -310,23 +395,71 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
                     return;
                 }
                 
+                // Choose the appropriate audio source based on mode
+                int audioSource;
+                if (useFallbackMode) {
+                    // If using fallback, record from microphone (which requires speakerphone)
+                    audioSource = MediaRecorder.AudioSource.MIC;
+                    
+                    // Turn on speakerphone for fallback mode
+                    if (audioManager != null) {
+                        audioManager.setSpeakerphoneOn(true);
+                    }
+                } else {
+                    // Try to use direct call audio if available
+                    audioSource = MediaRecorder.AudioSource.VOICE_CALL;
+                }
+                
                 audioRecord = new AudioRecord(
-                        MediaRecorder.AudioSource.VOICE_CALL, // Use VOICE_CALL to capture call audio if possible
+                        audioSource,
                         44100,
                         AudioFormat.CHANNEL_IN_MONO,
                         AudioFormat.ENCODING_PCM_16BIT,
                         bufferSize
                 );
 
-                if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
-                    // Fall back to microphone if we can't capture call audio directly
+                // If direct call audio didn't work, fall back to voice communication
+                if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED && !useFallbackMode) {
+                    audioRecord.release();
+                    audioSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION;
                     audioRecord = new AudioRecord(
-                            MediaRecorder.AudioSource.MIC,
+                            audioSource,
                             44100,
                             AudioFormat.CHANNEL_IN_MONO,
                             AudioFormat.ENCODING_PCM_16BIT,
                             bufferSize
                     );
+                }
+                
+                // If still not working, fall back to microphone
+                if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+                    audioRecord.release();
+                    audioSource = MediaRecorder.AudioSource.MIC;
+                    
+                    // Turn on speakerphone for fallback to microphone
+                    if (audioManager != null) {
+                        audioManager.setSpeakerphoneOn(true);
+                    }
+                    
+                    audioRecord = new AudioRecord(
+                            audioSource,
+                            44100,
+                            AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            bufferSize
+                    );
+                }
+
+                if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+                    // If we still can't initialize, report error
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        WritableMap result = Arguments.createMap();
+                        result.putBoolean("isDeepfake", false);
+                        result.putDouble("confidence", 0);
+                        result.putString("error", "Could not initialize audio recording");
+                        sendEvent("AudioAnalysisResult", result);
+                    });
+                    return;
                 }
 
                 audioRecord.startRecording();
@@ -358,11 +491,8 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
                             chunkStream.write(buffer, 0, samplesRead);
                             chunkStream.close();
                             
-                            WritableMap audioParams = Arguments.createMap();
-                            audioParams.putString("audioPath", audioChunk.getAbsolutePath());
-                            reactContext.runOnUiQueueThread(() -> {
-                                sendEvent("AudioChunkReady", audioParams);
-                            });
+                            // Perform audio analysis (in a real app, this would be more sophisticated)
+                            analyzeAudioChunk(buffer, samplesRead, audioChunk.getAbsolutePath());
                             
                             totalSamplesRead = 0;
                         }
@@ -374,6 +504,39 @@ public class CallMonitorModule extends ReactContextBaseJavaModule {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        });
+    }
+    
+    private void analyzeAudioChunk(byte[] buffer, int length, String audioPath) {
+        // In a real implementation, this would use your deepfake detection algorithm
+        // For now, we'll use a simple simulation
+        
+        // Convert byte array to short array (PCM 16-bit)
+        ShortBuffer shortBuffer = ByteBuffer.wrap(buffer, 0, length).asShortBuffer();
+        short[] audioShorts = new short[shortBuffer.limit()];
+        shortBuffer.get(audioShorts);
+        
+        // Calculate some basic audio metrics
+        long sum = 0;
+        long sumOfSquares = 0;
+        for (short sample : audioShorts) {
+            sum += sample;
+            sumOfSquares += sample * sample;
+        }
+        
+        // Simulated analysis (30% chance of being classified as deepfake)
+        final boolean isDeepfake = Math.random() < 0.3;
+        final int confidence = isDeepfake ? 
+                (int)(75 + Math.random() * 20) : // Higher confidence for deepfakes (75-95%)
+                (int)(65 + Math.random() * 30);  // Variable confidence for authentic (65-95%)
+        
+        // Send the analysis result to React Native
+        new Handler(Looper.getMainLooper()).post(() -> {
+            WritableMap result = Arguments.createMap();
+            result.putBoolean("isDeepfake", isDeepfake);
+            result.putDouble("confidence", confidence);
+            result.putString("audioSample", audioPath); // Path to audio sample
+            sendEvent("AudioAnalysisResult", result);
         });
     }
 

@@ -1,12 +1,14 @@
 
 import { callMonitorModule, CallInfo } from '../native/CallMonitorModule';
 import { Alert, Vibration } from 'react-native';
+import { backgroundService } from './backgroundService';
 
 /**
  * Service for monitoring phone calls on mobile devices
  */
 class CallMonitorService {
   private listeners: ((callInfo: CallInfo) => void)[] = [];
+  private analysisListeners: ((result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => void)[] = [];
   private isInitialized = false;
   private isMonitoring = false;
 
@@ -48,6 +50,9 @@ class CallMonitorService {
       // Set up call listener
       callMonitorModule.addCallListener(this.handleCallEvent);
       
+      // Set up audio analysis listener
+      callMonitorModule.addAudioAnalysisListener(this.handleAudioAnalysisResult);
+      
       this.isInitialized = initialized;
       return initialized;
     } catch (error) {
@@ -62,8 +67,24 @@ class CallMonitorService {
   private handleCallEvent = (callInfo: CallInfo) => {
     console.log('Call event received:', callInfo);
     
+    // Show appropriate UI messages for fallback mode
+    if (callInfo.state === CallState.OFFHOOK && !callInfo.usingDirectAudio) {
+      // Prompt for loudspeaker mode if using fallback
+      backgroundService.requestLoudspeakerMode();
+    }
+    
     // Notify all registered listeners
     this.notifyCallEvent(callInfo);
+  };
+  
+  /**
+   * Handle audio analysis results from the native module
+   */
+  private handleAudioAnalysisResult = (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => {
+    console.log('Audio analysis result received:', result);
+    
+    // Notify all registered listeners
+    this.notifyAnalysisResult(result);
   };
   
   /**
@@ -78,7 +99,12 @@ class CallMonitorService {
     if (this.isMonitoring) return true;
     
     try {
-      const result = await callMonitorModule.startMonitoring();
+      // Check if direct call audio access is available
+      const canAccessCallAudio = await callMonitorModule.canAccessCallAudio();
+      console.log(`Direct call audio access available: ${canAccessCallAudio}`);
+      
+      // Start monitoring with appropriate mode
+      const result = await callMonitorModule.startMonitoring(!canAccessCallAudio);
       this.isMonitoring = result;
       return result;
     } catch (error) {
@@ -116,10 +142,31 @@ class CallMonitorService {
   }
   
   /**
+   * Register a listener for audio analysis results
+   */
+  addAnalysisListener(listener: (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => void): void {
+    this.analysisListeners.push(listener);
+  }
+  
+  /**
+   * Remove a listener from audio analysis results
+   */
+  removeAnalysisListener(listener: (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => void): void {
+    this.analysisListeners = this.analysisListeners.filter(l => l !== listener);
+  }
+  
+  /**
    * Notify all listeners of a call event
    */
   notifyCallEvent(callInfo: CallInfo): void {
     this.listeners.forEach(listener => listener(callInfo));
+  }
+  
+  /**
+   * Notify all listeners of an audio analysis result
+   */
+  notifyAnalysisResult(result: { isDeepfake: boolean, confidence: number, audioSample?: string }): void {
+    this.analysisListeners.forEach(listener => listener(result));
   }
   
   /**
@@ -152,6 +199,17 @@ class CallMonitorService {
       return false;
     }
   }
+  
+  /**
+   * Check if direct call audio is being used (vs. fallback)
+   */
+  isUsingDirectAudio(): boolean {
+    return callMonitorModule.isUsingDirectAudioAccess();
+  }
 }
 
 export const callMonitorService = new CallMonitorService();
+// Re-export the CallState enum
+export { CallState } from '../native/CallMonitorModule';
+// Export the CallInfo type for use in components
+export type { CallInfo } from '../native/CallMonitorModule';

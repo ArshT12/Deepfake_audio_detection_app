@@ -14,6 +14,7 @@ export interface CallInfo {
   isIncoming: boolean;
   timestamp: number;
   state: CallState;
+  usingDirectAudio: boolean;
 }
 
 // Get the native module if available
@@ -35,8 +36,11 @@ class CallMonitor {
   private isInitialized = false;
   private isMonitoring = false;
   private callListeners: ((callInfo: CallInfo) => void)[] = [];
+  private audioAnalysisListeners: ((result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => void)[] = [];
   private simulatedCallInterval: NodeJS.Timeout | null = null;
   private eventSubscription: any = null;
+  private audioEventSubscription: any = null;
+  private usingFallbackMode = false;
 
   /**
    * Check if call monitoring is available on this device
@@ -51,6 +55,22 @@ class CallMonitor {
       return await NativeCallMonitorModule.isAvailable();
     } catch (error) {
       console.error('Error checking call monitoring availability:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if direct call audio access is available
+   */
+  async canAccessCallAudio(): Promise<boolean> {
+    if (!NativeCallMonitorModule) {
+      return false;
+    }
+    
+    try {
+      return await NativeCallMonitorModule.canAccessCallAudio();
+    } catch (error) {
+      console.error('Error checking call audio access:', error);
       return false;
     }
   }
@@ -96,6 +116,14 @@ class CallMonitor {
             this.callListeners.forEach(listener => listener(callInfo));
           }
         );
+        
+        // Set up event listener for audio analysis results
+        this.audioEventSubscription = callEventEmitter.addListener(
+          'AudioAnalysisResult',
+          (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => {
+            this.audioAnalysisListeners.forEach(listener => listener(result));
+          }
+        );
       }
       
       this.isInitialized = result;
@@ -108,14 +136,16 @@ class CallMonitor {
 
   /**
    * Start monitoring calls
+   * @param useFallback - Whether to use fallback mode (microphone instead of direct call audio)
    */
-  async startMonitoring(): Promise<boolean> {
+  async startMonitoring(useFallback: boolean = false): Promise<boolean> {
     if (!this.isInitialized) {
       const initialized = await this.initialize();
       if (!initialized) return false;
     }
 
     if (this.isMonitoring) return true;
+    this.usingFallbackMode = useFallback;
 
     if (!NativeCallMonitorModule) {
       // In simulation mode, start occasional demo calls
@@ -130,12 +160,61 @@ class CallMonitor {
     }
     
     try {
-      const result = await NativeCallMonitorModule.startMonitoring();
+      const result = await NativeCallMonitorModule.startMonitoring(useFallback);
       this.isMonitoring = result;
       return result;
     } catch (error) {
       console.error('Error starting call monitoring:', error);
       return false;
+    }
+  }
+
+  /**
+   * Optimize background monitoring when app goes to background
+   * @param useFallback - Whether using fallback mode
+   */
+  async optimizeBackgroundMonitoring(useFallback: boolean): Promise<boolean> {
+    if (!NativeCallMonitorModule || !this.isMonitoring) {
+      return false;
+    }
+    
+    try {
+      return await NativeCallMonitorModule.optimizeBackgroundMonitoring(useFallback);
+    } catch (error) {
+      console.error('Error optimizing background monitoring:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Refresh monitoring when app comes to foreground
+   * @param useFallback - Whether using fallback mode
+   */
+  async refreshMonitoring(useFallback: boolean): Promise<boolean> {
+    if (!NativeCallMonitorModule || !this.isMonitoring) {
+      return false;
+    }
+    
+    try {
+      return await NativeCallMonitorModule.refreshMonitoring(useFallback);
+    } catch (error) {
+      console.error('Error refreshing monitoring:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Prompt user to enable loudspeaker for fallback mode
+   */
+  async promptLoudspeaker(): Promise<void> {
+    if (!NativeCallMonitorModule) {
+      return;
+    }
+    
+    try {
+      await NativeCallMonitorModule.promptLoudspeaker();
+    } catch (error) {
+      console.error('Error prompting loudspeaker:', error);
     }
   }
 
@@ -180,6 +259,20 @@ class CallMonitor {
   }
 
   /**
+   * Register a listener for audio analysis results
+   */
+  addAudioAnalysisListener(listener: (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => void): void {
+    this.audioAnalysisListeners.push(listener);
+  }
+
+  /**
+   * Remove a listener from audio analysis results
+   */
+  removeAudioAnalysisListener(listener: (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => void): void {
+    this.audioAnalysisListeners = this.audioAnalysisListeners.filter(l => l !== listener);
+  }
+
+  /**
    * Start a simulated call for demo purposes
    */
   startDemoCall(): CallInfo {
@@ -199,7 +292,8 @@ class CallMonitor {
       phoneNumber,
       isIncoming,
       timestamp: Date.now(),
-      state: CallState.RINGING
+      state: CallState.RINGING,
+      usingDirectAudio: !this.usingFallbackMode
     };
 
     // Notify all listeners
@@ -212,6 +306,22 @@ class CallMonitor {
         state: CallState.OFFHOOK
       };
       this.callListeners.forEach(listener => listener(offhookInfo));
+      
+      // After a short delay, simulate audio analysis result
+      setTimeout(() => {
+        // 30% chance of being classified as deepfake
+        const isDeepfake = Math.random() < 0.3;
+        
+        // Generate a confidence between 65-95%
+        const confidence = isDeepfake 
+          ? Math.floor(75 + Math.random() * 20) // Higher confidence for deepfakes (75-95%)
+          : Math.floor(65 + Math.random() * 30); // Variable confidence for authentic (65-95%)
+        
+        this.audioAnalysisListeners.forEach(listener => listener({
+          isDeepfake,
+          confidence
+        }));
+      }, 3000);
       
       // After a longer delay, end the call
       setTimeout(() => {
@@ -244,12 +354,24 @@ class CallMonitor {
   }
 
   /**
+   * Check if direct call audio access is being used
+   */
+  isUsingDirectAudioAccess(): boolean {
+    return !this.usingFallbackMode;
+  }
+
+  /**
    * Clean up resources when component unmounts
    */
   cleanup() {
     if (this.eventSubscription) {
       this.eventSubscription.remove();
       this.eventSubscription = null;
+    }
+    
+    if (this.audioEventSubscription) {
+      this.audioEventSubscription.remove();
+      this.audioEventSubscription = null;
     }
     
     if (this.simulatedCallInterval) {
@@ -259,6 +381,7 @@ class CallMonitor {
     
     this.stopMonitoring();
     this.callListeners = [];
+    this.audioAnalysisListeners = [];
   }
 }
 

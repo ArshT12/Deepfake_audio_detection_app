@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
 import { useApp } from '../contexts/AppContext';
 import { Vibration } from 'react-native';
-import { callMonitorService } from '../services/callMonitorService';
+import { callMonitorService, CallInfo, CallState } from '../services/callMonitorService';
 import { backgroundService } from '../services/backgroundService';
 import { deepfakeApi } from '../services/deepfakeApi';
 import DetectionStatus from '../components/DetectionStatus';
@@ -57,6 +57,52 @@ const AudioRecorder = () => {
   );
 };
 
+// Phone icon component
+const PhoneIcon = ({ size = 24, color = "#9b87f5" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+// Mic icon component
+const MicIcon = ({ size = 24, color = "#9b87f5" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+// Upload icon component
+const UploadIcon = ({ size = 24, color = "#9b87f5" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
 const AudioAnalysis: React.FC = () => {
   const { addDetection, settings } = useApp();
   
@@ -64,6 +110,8 @@ const AudioAnalysis: React.FC = () => {
   const [detectionResult, setDetectionResult] = useState<null | { isDeepfake: boolean; confidence: number }>(null);
   const [isCallMonitoring, setIsCallMonitoring] = useState(false);
   const [activeTab, setActiveTab] = useState('monitor');
+  const [currentCall, setCurrentCall] = useState<CallInfo | null>(null);
+  const [monitoringMode, setMonitoringMode] = useState<'direct' | 'fallback' | 'none'>('none');
   
   // Call monitor initialization
   useEffect(() => {
@@ -71,9 +119,10 @@ const AudioAnalysis: React.FC = () => {
       await callMonitorService.initialize();
       
       // Add listener for call events
-      callMonitorService.addCallListener((callInfo) => {
-        Alert.alert("Call Detected", `${callInfo.isIncoming ? "Incoming" : "Outgoing"} call: ${callInfo.phoneNumber}`);
-      });
+      callMonitorService.addCallListener(handleCallEvent);
+      
+      // Add listener for audio analysis results
+      callMonitorService.addAnalysisListener(handleAnalysisResult);
     };
     
     initCallMonitor();
@@ -82,8 +131,93 @@ const AudioAnalysis: React.FC = () => {
       if (isCallMonitoring) {
         stopCallMonitoring();
       }
+      callMonitorService.removeCallListener(handleCallEvent);
+      callMonitorService.removeAnalysisListener(handleAnalysisResult);
     };
   }, []);
+  
+  const handleCallEvent = (callInfo: CallInfo) => {
+    console.log('Call event received:', callInfo);
+    setCurrentCall(callInfo);
+    
+    // Update monitoring mode
+    if (callInfo.usingDirectAudio) {
+      setMonitoringMode('direct');
+    } else {
+      setMonitoringMode('fallback');
+    }
+    
+    // Show appropriate UI for call state
+    if (callInfo.state === CallState.RINGING) {
+      Alert.alert(
+        "Call Detected", 
+        `${callInfo.isIncoming ? "Incoming" : "Outgoing"} call: ${callInfo.phoneNumber}`
+      );
+    } else if (callInfo.state === CallState.OFFHOOK) {
+      if (!callInfo.usingDirectAudio) {
+        // Prompt for loudspeaker mode if needed
+        Alert.alert(
+          "Speakerphone Required",
+          "Please enable speakerphone for voice analysis",
+          [
+            { text: "Enable", onPress: () => backgroundService.requestLoudspeakerMode() },
+            { text: "Cancel" }
+          ]
+        );
+      }
+    } else if (callInfo.state === CallState.IDLE) {
+      setCurrentCall(null);
+      setMonitoringMode('none');
+      setDetectionResult(null);
+    }
+  };
+
+  const handleAnalysisResult = (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => {
+    console.log('Audio analysis result:', result);
+    
+    setDetectionResult({
+      isDeepfake: result.isDeepfake,
+      confidence: result.confidence
+    });
+    
+    setIsAnalyzing(false);
+    
+    // Add to detection history
+    addDetection({
+      isDeepfake: result.isDeepfake,
+      confidence: result.confidence,
+      phoneNumber: currentCall ? currentCall.phoneNumber : 'Demo Analysis'
+    });
+    
+    // Handle deepfake detection
+    if (result.isDeepfake) {
+      if (settings.vibrateOnDeepfake) {
+        Vibration.vibrate([0, 300, 100, 300]);
+      }
+      
+      Alert.alert(
+        "Deepfake Detected!", 
+        `Confidence: ${result.confidence}%`,
+        [{ text: "OK" }]
+      );
+      
+      // Auto end call if enabled in settings
+      if (settings.autoEndCallOnDeepfake && currentCall) {
+        Alert.alert(
+          "End Call?", 
+          "Deepfake detected. Would you like to end the call?",
+          [
+            { 
+              text: "End Call", 
+              style: "destructive",
+              onPress: () => callMonitorService.endCall() 
+            },
+            { text: "Continue Call" }
+          ]
+        );
+      }
+    }
+  };
 
   // Call monitoring setup
   useEffect(() => {
@@ -108,9 +242,14 @@ const AudioAnalysis: React.FC = () => {
         return;
       }
       
-      // In a real app, this would set up audio recording of calls
+      // Check which monitoring mode is active
+      const usingDirectAudio = callMonitorService.isUsingDirectAudio();
+      setMonitoringMode(usingDirectAudio ? 'direct' : 'fallback');
       
-      Alert.alert("Monitoring Active", `Analyzing audio every ${settings.analysisDuration} seconds`);
+      Alert.alert(
+        "Monitoring Active", 
+        `${usingDirectAudio ? "Using direct call audio monitoring" : "Using fallback mode with speakerphone"}`
+      );
       
     } catch (error) {
       console.error('Error starting call monitoring:', error);
@@ -120,12 +259,13 @@ const AudioAnalysis: React.FC = () => {
   };
   
   const stopCallMonitoring = () => {
-    // In a real app, this would stop audio recording
     callMonitorService.stopMonitoring();
+    setMonitoringMode('none');
   };
 
   const simulateAnalysis = () => {
     setIsAnalyzing(true);
+    setMonitoringMode('direct'); // Assume direct mode for demo
     
     // Simulate API call delay
     setTimeout(() => {
@@ -137,32 +277,10 @@ const AudioAnalysis: React.FC = () => {
         ? Math.floor(75 + Math.random() * 20) // Higher confidence for deepfakes (75-95%)
         : Math.floor(65 + Math.random() * 30); // Variable confidence for authentic (65-95%)
       
-      setDetectionResult({
+      handleAnalysisResult({
         isDeepfake,
         confidence: mockConfidence
       });
-      
-      // Add to detection history
-      addDetection({
-        isDeepfake,
-        confidence: mockConfidence,
-        phoneNumber: isCallMonitoring ? 'Live Call' : 'Demo Analysis'
-      });
-      
-      if (isDeepfake && settings.vibrateOnDeepfake) {
-        Vibration.vibrate([0, 300, 100, 300]);
-      }
-      
-      setIsAnalyzing(false);
-      
-      if (isDeepfake) {
-        Alert.alert(
-          "Deepfake Detected!", 
-          `Confidence: ${mockConfidence}%`,
-          [{ text: "OK" }]
-        );
-      }
-      
     }, 2000);
   };
 
@@ -170,11 +288,12 @@ const AudioAnalysis: React.FC = () => {
     simulateAnalysis();
   };
 
-  const TabButton = ({ id, label, icon }) => (
+  const TabButton = ({ id, label, icon }: { id: string; label: string; icon: React.ReactNode }) => (
     <TouchableOpacity
       style={[styles.tabButton, activeTab === id && styles.activeTabButton]}
       onPress={() => setActiveTab(id)}
     >
+      {icon}
       <Text style={[styles.tabText, activeTab === id && styles.activeTabText]}>
         {label}
       </Text>
@@ -193,15 +312,7 @@ const AudioAnalysis: React.FC = () => {
               onPress={handleDemoCall}
               disabled={isAnalyzing}
             >
-              <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"
-                  stroke="#FFFFFF"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+              <PhoneIcon size={32} color="#FFFFFF" />
               <Text style={styles.demoButtonText}>
                 {isAnalyzing ? "Analyzing..." : "Start Demo Call"}
               </Text>
@@ -239,6 +350,18 @@ const AudioAnalysis: React.FC = () => {
     }
   };
 
+  // Get monitoring mode display text
+  const getMonitoringModeText = () => {
+    switch (monitoringMode) {
+      case 'direct':
+        return 'Using direct call audio';
+      case 'fallback':
+        return 'Using fallback mode (speakerphone required)';
+      default:
+        return 'Monitoring inactive';
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Header title="Voice Guardian Shield" showSettings={true} />
@@ -249,20 +372,23 @@ const AudioAnalysis: React.FC = () => {
           <View style={styles.monitoringControl}>
             <View>
               <View style={styles.titleWithIcon}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" style={styles.titleIcon}>
-                  <Path
-                    d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"
-                    stroke="#9b87f5"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
+                <PhoneIcon size={20} />
                 <Text style={styles.cardTitle}>Call Monitoring</Text>
               </View>
               <Text style={styles.cardSubtitle}>
                 Monitor real calls for deepfake voices
               </Text>
+              
+              {isCallMonitoring && (
+                <View style={styles.monitoringModeContainer}>
+                  <Text style={[
+                    styles.monitoringModeText,
+                    monitoringMode === 'direct' ? styles.directModeText : styles.fallbackModeText
+                  ]}>
+                    {getMonitoringModeText()}
+                  </Text>
+                </View>
+              )}
             </View>
             <TouchableOpacity 
               style={[styles.switch, isCallMonitoring && styles.switchActive]}
@@ -275,9 +401,21 @@ const AudioAnalysis: React.FC = () => {
         
         {/* Tab Navigation */}
         <View style={styles.tabs}>
-          <TabButton id="monitor" label="Monitor" />
-          <TabButton id="record" label="Record" />
-          <TabButton id="upload" label="Upload" />
+          <TabButton 
+            id="monitor" 
+            label="Monitor" 
+            icon={<PhoneIcon size={18} color={activeTab === 'monitor' ? "#9b87f5" : "#8E9196"} />} 
+          />
+          <TabButton 
+            id="record" 
+            label="Record" 
+            icon={<MicIcon size={18} color={activeTab === 'record' ? "#9b87f5" : "#8E9196"} />} 
+          />
+          <TabButton 
+            id="upload" 
+            label="Upload" 
+            icon={<UploadIcon size={18} color={activeTab === 'upload' ? "#9b87f5" : "#8E9196"} />} 
+          />
         </View>
         
         {/* Tab Content */}
@@ -294,6 +432,25 @@ const AudioAnalysis: React.FC = () => {
               isDeepfake={null}
               confidence={0}
             />
+          </View>
+        )}
+        
+        {/* Fallback Mode Info - show if using fallback */}
+        {monitoringMode === 'fallback' && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Fallback Mode Active</Text>
+            <Text style={styles.infoText}>
+              Direct call audio access is not available on this device. Using speakerphone mode for detection.
+            </Text>
+            <Text style={styles.infoText}>
+              Please put calls on speakerphone for the best detection results.
+            </Text>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => Linking.openURL('https://voiceguardianshield.com/fallback-mode-info')}
+            >
+              <Text style={styles.infoButtonText}>Learn More</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -336,6 +493,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',
+    marginLeft: 8,
   },
   cardSubtitle: {
     fontSize: 14,
@@ -373,6 +531,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     backgroundColor: '#F6F6F7',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   activeTabButton: {
     backgroundColor: '#FFFFFF',
@@ -380,6 +540,7 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 14,
     color: '#8E9196',
+    marginLeft: 4,
   },
   activeTabText: {
     color: '#9b87f5',
@@ -440,6 +601,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8E9196',
     textAlign: 'center',
+  },
+  monitoringModeContainer: {
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: '#F6F6F7',
+    alignSelf: 'flex-start',
+  },
+  monitoringModeText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  directModeText: {
+    color: '#34C759', // Green for direct mode
+  },
+  fallbackModeText: {
+    color: '#FF9500', // Orange for fallback mode
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#8E9196',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  infoButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#F6F6F7',
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+  infoButtonText: {
+    color: '#9b87f5',
+    fontWeight: '500',
   },
 });
 

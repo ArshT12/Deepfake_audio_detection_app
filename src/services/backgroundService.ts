@@ -8,6 +8,7 @@ import { callMonitorModule } from '../native/CallMonitorModule';
 class BackgroundService {
   private isRunning: boolean = false;
   private appStateSubscription: any = null;
+  private useFallbackMode: boolean = false;
   
   /**
    * Start background call monitoring service
@@ -19,8 +20,18 @@ class BackgroundService {
     }
     
     try {
+      // Check if direct call audio access is available
+      const directAccessAvailable = await callMonitorModule.canAccessCallAudio();
+      this.useFallbackMode = !directAccessAvailable;
+      
+      if (this.useFallbackMode) {
+        console.log('Using fallback monitoring mode (loudspeaker)');
+      } else {
+        console.log('Using direct call audio monitoring');
+      }
+      
       // Start native call monitoring
-      const started = await callMonitorModule.startMonitoring();
+      const started = await callMonitorModule.startMonitoring(this.useFallbackMode);
       
       if (!started) {
         console.error('Failed to start call monitoring');
@@ -45,10 +56,16 @@ class BackgroundService {
   private handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (nextAppState === 'active') {
       console.log('App has come to the foreground');
-      // Optionally refresh monitoring when app comes back to foreground
+      // Refresh monitoring when app comes back to foreground
+      if (this.isRunning) {
+        callMonitorModule.refreshMonitoring(this.useFallbackMode);
+      }
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
       console.log('App has gone to the background');
-      // Handle background state if needed
+      // Ensure background monitoring continues
+      if (this.isRunning) {
+        callMonitorModule.optimizeBackgroundMonitoring(this.useFallbackMode);
+      }
     }
   };
   
@@ -85,10 +102,26 @@ class BackgroundService {
   }
   
   /**
+   * Check if using fallback mode
+   */
+  isFallbackModeActive(): boolean {
+    return this.useFallbackMode;
+  }
+  
+  /**
    * Check if background services are available on this device
    */
   async areBackgroundServicesAvailable(): Promise<boolean> {
     return Platform.OS === 'android' || Platform.OS === 'ios';
+  }
+  
+  /**
+   * Request user to enable loudspeaker for fallback mode
+   */
+  async requestLoudspeakerMode(): Promise<void> {
+    if (this.useFallbackMode) {
+      await callMonitorModule.promptLoudspeaker();
+    }
   }
 }
 
