@@ -7,10 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AudioRecorder from '../components/AudioRecorder';
 import FileAnalyzer from '../components/FileAnalyzer';
 import DetectionStatus from '../components/DetectionStatus';
+import CallDemo from '../components/CallDemo';
 import { deepfakeApi } from '../services/deepfakeApi';
+import { callMonitorService } from '../services/callMonitorService';
+import { backgroundService } from '../services/backgroundService';
 import { toast } from '@/components/ui/sonner';
 import { Switch } from '@/components/ui/switch';
-import { Phone } from 'lucide-react';
+import { Phone, Mic } from 'lucide-react';
 
 const AudioAnalysis: React.FC = () => {
   const { addDetection, settings } = useApp();
@@ -19,24 +22,54 @@ const AudioAnalysis: React.FC = () => {
   const [detectionResult, setDetectionResult] = useState<null | { isDeepfake: boolean; confidence: number }>(null);
   const [isCallMonitoring, setIsCallMonitoring] = useState(false);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [activeTab, setActiveTab] = useState('monitor');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Call monitor initialization
+  useEffect(() => {
+    const initCallMonitor = async () => {
+      await callMonitorService.initialize();
+      
+      // Add listener for call events
+      callMonitorService.addCallListener((callInfo) => {
+        toast.info(`Call detected: ${callInfo.phoneNumber}`, {
+          description: callInfo.isIncoming ? "Incoming call" : "Outgoing call"
+        });
+      });
+    };
+    
+    initCallMonitor();
+    
+    return () => {
+      stopCallMonitoring();
+    };
+  }, []);
 
   // Call audio monitoring setup
   useEffect(() => {
     if (isCallMonitoring) {
       startCallMonitoring();
+      // Also start background service
+      backgroundService.startBackgroundMonitoring();
     } else {
       stopCallMonitoring();
+      backgroundService.stopBackgroundMonitoring();
     }
     
-    return () => {
-      stopCallMonitoring();
-    };
   }, [isCallMonitoring]);
   
   const startCallMonitoring = async () => {
     try {
+      // Start the call monitoring service
+      const started = await callMonitorService.startMonitoring();
+      
+      if (!started) {
+        toast.error("Failed to start call monitoring");
+        setIsCallMonitoring(false);
+        return;
+      }
+      
       // Request microphone access to monitor call audio
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
@@ -170,6 +203,20 @@ const AudioAnalysis: React.FC = () => {
   const handleFileSelected = (file: File) => {
     analyzeAudio(file);
   };
+  
+  const handleCallDemoResult = (isDeepfake: boolean, confidence: number, phoneNumber: string) => {
+    setDetectionResult({
+      isDeepfake,
+      confidence
+    });
+    
+    // Add to detection history
+    addDetection({
+      isDeepfake,
+      confidence,
+      phoneNumber
+    });
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -195,30 +242,61 @@ const AudioAnalysis: React.FC = () => {
           </div>
         </div>
         
-        <Tabs defaultValue="record" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="record">Record Audio</TabsTrigger>
-            <TabsTrigger value="upload">Upload File</TabsTrigger>
+        <Tabs defaultValue="monitor" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="monitor">Monitor</TabsTrigger>
+            <TabsTrigger value="record">Record</TabsTrigger>
+            <TabsTrigger value="upload">Upload</TabsTrigger>
           </TabsList>
           
           <div className="guardian-card p-4 mb-6">
+            <TabsContent value="monitor">
+              <CallDemo 
+                onAnalysisResult={handleCallDemoResult} 
+                isAnalyzing={isAnalyzing}
+                detectionResult={detectionResult}
+              />
+            </TabsContent>
+            
             <TabsContent value="record">
               <AudioRecorder onRecordingComplete={handleRecordingComplete} />
+              
+              {!isAnalyzing && detectionResult && (
+                <div className="mt-6">
+                  <DetectionStatus 
+                    isDetecting={false} 
+                    isDeepfake={detectionResult.isDeepfake}
+                    confidence={detectionResult.confidence}
+                  />
+                </div>
+              )}
             </TabsContent>
             
             <TabsContent value="upload">
               <FileAnalyzer onFileSelected={handleFileSelected} />
+              
+              {!isAnalyzing && detectionResult && (
+                <div className="mt-6">
+                  <DetectionStatus 
+                    isDetecting={false} 
+                    isDeepfake={detectionResult.isDeepfake}
+                    confidence={detectionResult.confidence}
+                  />
+                </div>
+              )}
             </TabsContent>
           </div>
           
-          <div className="guardian-card p-4">
-            <h2 className="text-lg font-bold mb-4 text-center">Detection Results</h2>
-            <DetectionStatus 
-              isDetecting={isAnalyzing} 
-              isDeepfake={detectionResult?.isDeepfake ?? null}
-              confidence={detectionResult?.confidence ?? 0}
-            />
-          </div>
+          {isAnalyzing && (
+            <div className="guardian-card p-4">
+              <h2 className="text-lg font-bold mb-4 text-center">Detection Results</h2>
+              <DetectionStatus 
+                isDetecting={isAnalyzing} 
+                isDeepfake={null}
+                confidence={0}
+              />
+            </div>
+          )}
         </Tabs>
       </div>
       

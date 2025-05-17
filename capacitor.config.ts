@@ -10,7 +10,16 @@ const config: CapacitorConfig = {
     cleartext: true
   },
   plugins: {
-    // Add any Capacitor plugins configuration here
+    BackgroundRunner: {
+      label: 'com.voiceguardian.monitoring',
+      src: 'background.js',
+      event: 'start',
+      autoStart: true
+    },
+    Permissions: {
+      phone: true,
+      microphone: true
+    }
   }
 };
 
