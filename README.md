@@ -1,79 +1,73 @@
+# Welcome to your Lovable project
 
-# Voice Guardian Shield - React Native App
+## Project info
 
-This is a React Native version of the Voice Guardian Shield application, designed to detect deepfake voices in phone calls.
+**URL**: https://lovable.dev/projects/08e949ac-2d63-45ba-b13d-0a9ec463f952
 
-## Getting Started
+## How can I edit this code?
 
-### Prerequisites
+There are several ways of editing your application.
 
-- Node.js (v14 or later)
-- npm or yarn
-- React Native CLI
-- Xcode (for iOS development)
-- Android Studio (for Android development)
+**Use Lovable**
 
-### Installation
+Simply visit the [Lovable Project](https://lovable.dev/projects/08e949ac-2d63-45ba-b13d-0a9ec463f952) and start prompting.
 
-1. Clone this repository
-```bash
-git clone https://github.com/your-username/voice-guardian-shield.git
-cd voice-guardian-shield
+Changes made via Lovable will be committed automatically to this repo.
+
+**Use your preferred IDE**
+
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+
+Follow these steps:
+
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
+npm run dev
 ```
 
-2. Install dependencies
-```bash
-npm install
-# or
-yarn install
-```
+**Edit a file directly in GitHub**
 
-3. Start the Metro bundler
-```bash
-npm start
-# or
-yarn start
-```
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-4. Run on Android or iOS
-```bash
-npm run android
-# or
-npm run ios
-```
+**Use GitHub Codespaces**
 
-## Features
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-- Real-time deepfake voice detection
-- Call monitoring integration
-- Audio recording and analysis
-- Settings customization
-- Detection history
+## What technologies are used for this project?
 
-## Project Structure
+This project is built with:
 
-- `/src` - Source code
-  - `/components` - Reusable UI components
-  - `/contexts` - React contexts for state management
-  - `/native` - Native module bridges
-  - `/pages` - Application screens
-  - `/services` - API and utility services
-  - `/types` - TypeScript type definitions
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-## Native Modules
+## How can I deploy this project?
 
-### CallMonitorModule
+Simply open [Lovable](https://lovable.dev/projects/08e949ac-2d63-45ba-b13d-0a9ec463f952) and click on Share -> Publish.
 
-This module interacts with the native phone APIs to monitor calls and analyze voice data for deepfake detection.
+## Can I connect a custom domain to my Lovable project?
 
-#### Android Implementation
+Yes, you can!
 
-Located in `android/app/src/main/java/com/voiceguardianshield/CallMonitorModule.java`
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-#### iOS Implementation
-
-Located in `ios/VoiceGuardianShield/CallMonitorModule.swift`
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)

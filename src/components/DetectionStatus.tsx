@@ -1,152 +1,118 @@
 
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import React, { useEffect, useState } from 'react';
+import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
+import 'react-circular-progressbar/dist/styles.css';
+import { AlertTriangle, CircleCheck } from 'lucide-react';
 
-interface DetectionStatusProps {
+type DetectionStatusProps = {
   isDetecting: boolean;
   isDeepfake: boolean | null;
   confidence: number;
-}
+};
 
-const DetectionStatus: React.FC<DetectionStatusProps> = ({ isDetecting, isDeepfake, confidence }) => {
+const DetectionStatus: React.FC<DetectionStatusProps> = ({ 
+  isDetecting, 
+  isDeepfake, 
+  confidence 
+}) => {
+  const [showRipple, setShowRipple] = useState(false);
+
+  useEffect(() => {
+    if (isDeepfake !== null) {
+      setShowRipple(isDeepfake);
+      
+      // Vibration alert if deepfake detected
+      if (isDeepfake && navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    }
+  }, [isDeepfake]);
+
   if (isDetecting) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#9b87f5" />
-        <Text style={styles.text}>Analyzing voice patterns...</Text>
-      </View>
+      <div className="flex flex-col items-center">
+        <div className="h-32 w-32">
+          <CircularProgressbar 
+            value={70}
+            text="Analyzing"
+            strokeWidth={8}
+            styles={buildStyles({
+              textSize: '14px',
+              pathColor: '#1E3A8A',
+              textColor: '#1E3A8A',
+              trailColor: '#E2E8F0',
+              pathTransitionDuration: 0.5,
+              pathTransition: 'stroke-dashoffset 0.5s ease 0s',
+              rotation: 0.5,
+            })}
+          />
+        </div>
+        <p className="text-center mt-4 text-guardian-gray">
+          Analyzing voice patterns...
+        </p>
+      </div>
     );
   }
 
   if (isDeepfake === null) {
     return (
-      <View style={styles.container}>
-        <View style={styles.neutralIcon}>
-          <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
-            <Path 
-              d="M8 12h8m-4-4v8M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
-              stroke="#8E9196" 
-              strokeWidth={2} 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
-            />
-          </Svg>
-        </View>
-        <Text style={styles.text}>No analysis performed yet</Text>
-      </View>
+      <div className="flex flex-col items-center">
+        <div className="h-32 w-32 flex items-center justify-center bg-gray-100 rounded-full">
+          <p className="text-gray-500">Ready</p>
+        </div>
+        <p className="text-center mt-4 text-guardian-gray">
+          Start a call to begin detection
+        </p>
+      </div>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {isDeepfake ? (
-        <View style={styles.deepfakeContainer}>
-          <View style={styles.deepfakeIcon}>
-            <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
-              <Path 
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
-                stroke="#ea384c" 
-                strokeWidth={2} 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </View>
-          <View>
-            <Text style={styles.alertTitle}>Deepfake Detected</Text>
-            <Text style={styles.alertDescription}>
-              This voice may be artificially generated ({confidence.toFixed(0)}% confidence)
-            </Text>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.authenticContainer}>
-          <View style={styles.authenticIcon}>
-            <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
-              <Path 
-                d="M5 13l4 4L19 7" 
-                stroke="#10b981" 
-                strokeWidth={2} 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </View>
-          <View>
-            <Text style={styles.alertTitle}>Voice Authentic</Text>
-            <Text style={styles.alertDescription}>
-              No manipulation detected ({confidence.toFixed(0)}% confidence)
-            </Text>
-          </View>
-        </View>
-      )}
-    </View>
+    <div className="flex flex-col items-center">
+      <div className="ripple-container h-32 w-32">
+        {showRipple && (
+          <>
+            <div className={`ripple ${isDeepfake ? 'bg-guardian-red/30' : 'bg-guardian-success/30'}`} style={{ animationDelay: '0s' }}></div>
+            <div className={`ripple ${isDeepfake ? 'bg-guardian-red/20' : 'bg-guardian-success/20'}`} style={{ animationDelay: '0.5s' }}></div>
+          </>
+        )}
+        
+        <div className="h-32 w-32">
+          <CircularProgressbar
+            value={confidence}
+            text={`${confidence.toFixed(0)}%`}
+            strokeWidth={8}
+            styles={buildStyles({
+              textSize: '20px',
+              pathColor: isDeepfake ? '#DC2626' : '#16A34A',
+              textColor: isDeepfake ? '#DC2626' : '#16A34A',
+              trailColor: '#E2E8F0',
+            })}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center">
+        {isDeepfake ? (
+          <>
+            <AlertTriangle className="text-guardian-red mr-2" size={24} />
+            <h2 className="text-guardian-red font-bold text-xl">Deepfake Detected!</h2>
+          </>
+        ) : (
+          <>
+            <CircleCheck className="text-guardian-success mr-2" size={24} />
+            <h2 className="text-guardian-success font-bold text-xl">Voice Authentic</h2>
+          </>
+        )}
+      </div>
+
+      <p className="text-center mt-2 text-guardian-gray">
+        {isDeepfake 
+          ? "This voice appears to be synthetically generated."
+          : "This voice appears to be from a real person."}
+      </p>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  text: {
-    marginTop: 12,
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#8E9196',
-  },
-  neutralIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F1F1F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deepfakeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff0f0',
-    padding: 16,
-    borderRadius: 12,
-    width: '100%',
-  },
-  deepfakeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(234, 56, 76, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  authenticContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0fff4',
-    padding: 16,
-    borderRadius: 12,
-    width: '100%',
-  },
-  authenticIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  alertTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  alertDescription: {
-    fontSize: 14,
-    color: '#8E9196',
-  },
-});
 
 export default DetectionStatus;

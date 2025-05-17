@@ -1,45 +1,53 @@
 
-import { AppState, AppStateStatus, Platform } from 'react-native';
-import { callMonitorModule } from '../native/CallMonitorModule';
+import { BackgroundRunner } from '@capacitor/background-runner';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * Service for managing background tasks for call monitoring
  */
 class BackgroundService {
+  private isAvailable: boolean;
   private isRunning: boolean = false;
-  private appStateSubscription: any = null;
-  private useFallbackMode: boolean = false;
+  
+  constructor() {
+    // Check if we're on a native platform and background runner is available
+    this.isAvailable = Capacitor.isNativePlatform();
+    
+    // Initialize event listeners for background task events
+    if (this.isAvailable) {
+      BackgroundRunner.addListener('backgroundEvent', (info) => {
+        console.log('Background event received:', info);
+        
+        if (info.event === 'heartbeat') {
+          console.log('Background service is active, heartbeat received');
+        }
+      });
+    }
+  }
   
   /**
    * Start background call monitoring service
    */
   async startBackgroundMonitoring(): Promise<boolean> {
+    if (!this.isAvailable) {
+      console.log('Background services not available in web environment');
+      return false;
+    }
+    
     if (this.isRunning) {
       console.log('Background monitoring is already running');
       return true;
     }
     
     try {
-      // Check if direct call audio access is available
-      const directAccessAvailable = await callMonitorModule.canAccessCallAudio();
-      this.useFallbackMode = !directAccessAvailable;
-      
-      if (this.useFallbackMode) {
-        console.log('Using fallback monitoring mode (loudspeaker)');
-      } else {
-        console.log('Using direct call audio monitoring');
-      }
-      
-      // Start native call monitoring
-      const started = await callMonitorModule.startMonitoring(this.useFallbackMode);
-      
-      if (!started) {
-        console.error('Failed to start call monitoring');
-        return false;
-      }
-      
-      // Set up app state listener to handle app going to background
-      this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
+      // Start the background monitoring service
+      await BackgroundRunner.dispatchEvent({
+        label: 'com.voiceguardian.monitoring',
+        event: 'start',
+        details: {
+          timestamp: new Date().toISOString()
+        }
+      });
       
       this.isRunning = true;
       console.log('Background call monitoring service started');
@@ -51,39 +59,21 @@ class BackgroundService {
   }
   
   /**
-   * Handle app state changes (foreground/background)
-   */
-  private handleAppStateChange = (nextAppState: AppStateStatus) => {
-    if (nextAppState === 'active') {
-      console.log('App has come to the foreground');
-      // Refresh monitoring when app comes back to foreground
-      if (this.isRunning) {
-        callMonitorModule.refreshMonitoring(this.useFallbackMode);
-      }
-    } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-      console.log('App has gone to the background');
-      // Ensure background monitoring continues
-      if (this.isRunning) {
-        callMonitorModule.optimizeBackgroundMonitoring(this.useFallbackMode);
-      }
-    }
-  };
-  
-  /**
    * Stop background call monitoring service
    */
   async stopBackgroundMonitoring(): Promise<boolean> {
-    if (!this.isRunning) {
+    if (!this.isAvailable || !this.isRunning) {
       return false;
     }
     
     try {
-      await callMonitorModule.stopMonitoring();
-      
-      if (this.appStateSubscription) {
-        this.appStateSubscription.remove();
-        this.appStateSubscription = null;
-      }
+      await BackgroundRunner.dispatchEvent({
+        label: 'com.voiceguardian.monitoring',
+        event: 'stop',
+        details: {
+          timestamp: new Date().toISOString()
+        }
+      });
       
       this.isRunning = false;
       console.log('Background call monitoring service stopped');
@@ -102,26 +92,10 @@ class BackgroundService {
   }
   
   /**
-   * Check if using fallback mode
-   */
-  isFallbackModeActive(): boolean {
-    return this.useFallbackMode;
-  }
-  
-  /**
    * Check if background services are available on this device
    */
-  async areBackgroundServicesAvailable(): Promise<boolean> {
-    return Platform.OS === 'android' || Platform.OS === 'ios';
-  }
-  
-  /**
-   * Request user to enable loudspeaker for fallback mode
-   */
-  async requestLoudspeakerMode(): Promise<void> {
-    if (this.useFallbackMode) {
-      await callMonitorModule.promptLoudspeaker();
-    }
+  areBackgroundServicesAvailable(): boolean {
+    return this.isAvailable;
   }
 }
 
