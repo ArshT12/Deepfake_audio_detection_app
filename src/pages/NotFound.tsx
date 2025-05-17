@@ -30,7 +30,7 @@ const NotFound: React.FC = () => {
         
         <TouchableOpacity
           style={styles.button}
-          onPress={() => navigation.navigate('AudioAnalysis')}
+          onPress={() => navigation.navigate('AudioAnalysis' as never)}
         >
           <Text style={styles.buttonText}>Go to Home</Text>
         </TouchableOpacity>

@@ -33,7 +33,7 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton = false, showSett
         {showSettings && (
           <TouchableOpacity 
             style={styles.settingsButton}
-            onPress={() => navigation.navigate('Settings')}
+            onPress={() => navigation.navigate('Settings' as never)}
           >
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
               <Path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="#000" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />

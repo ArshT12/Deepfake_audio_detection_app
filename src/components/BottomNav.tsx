@@ -19,7 +19,7 @@ const BottomNav: React.FC = () => {
     <View style={styles.container}>
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => navigation.navigate('AudioAnalysis')}
+        onPress={() => navigation.navigate('AudioAnalysis' as never)}
       >
         <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
           <Path 
@@ -44,7 +44,7 @@ const BottomNav: React.FC = () => {
       
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => navigation.navigate('Dashboard')}
+        onPress={() => navigation.navigate('Dashboard' as never)}
       >
         <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
           <Path 
@@ -62,7 +62,7 @@ const BottomNav: React.FC = () => {
       
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => navigation.navigate('Settings')}
+        onPress={() => navigation.navigate('Settings' as never)}
       >
         <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
           <Path 

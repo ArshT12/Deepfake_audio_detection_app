@@ -10,6 +10,9 @@ export interface CallInfo {
   state?: CallState;
   usingDirectAudio?: boolean;
   isIncoming?: boolean;
+  isDeepfake?: boolean;
+  confidence?: number;
+  audioSample?: string;
 }
 
 // Define CallState enum and export it
