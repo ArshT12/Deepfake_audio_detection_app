@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { toast } from '@/components/ui/use-toast';
+import { UserSettings } from '../types';
 
 const Settings: React.FC = () => {
   const { settings, updateSettings, detections, clearDetections } = useApp();
