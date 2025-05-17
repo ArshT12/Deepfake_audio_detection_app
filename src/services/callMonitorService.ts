@@ -7,10 +7,13 @@ export interface CallInfo {
   phoneNumber: string;
   timestamp: number;
   callType: 'incoming' | 'outgoing' | 'unknown';
+  state?: CallState;
+  usingDirectAudio?: boolean;
+  isIncoming?: boolean;
 }
 
-// Define CallState enum that was missing
-enum CallState {
+// Define CallState enum and export it
+export enum CallState {
   IDLE = 'IDLE',
   RINGING = 'RINGING',
   OFFHOOK = 'OFFHOOK',
@@ -170,9 +173,19 @@ class CallMonitorService {
     this.callListeners.push(listener);
   }
   
+  // Add a listener for analysis events - for AudioAnalysis page
+  addAnalysisListener(listener: (call: CallInfo) => void): void {
+    this.addCallListener(listener);
+  }
+  
   // Remove a call listener
   removeCallListener(listener: (call: CallInfo) => void): void {
     this.callListeners = this.callListeners.filter(l => l !== listener);
+  }
+  
+  // Remove an analysis listener - alias for removeCallListener
+  removeAnalysisListener(listener: (call: CallInfo) => void): void {
+    this.removeCallListener(listener);
   }
   
   // Notify all listeners about a call event
@@ -193,7 +206,10 @@ class CallMonitorService {
       id: Date.now().toString(),
       phoneNumber: phoneNumbers[Math.floor(Math.random() * phoneNumbers.length)],
       timestamp: Date.now(),
-      callType: Math.random() > 0.5 ? 'incoming' : 'outgoing'
+      callType: Math.random() > 0.5 ? 'incoming' : 'outgoing',
+      state: CallState.RINGING,
+      usingDirectAudio: Math.random() > 0.5,
+      isIncoming: Math.random() > 0.5
     };
     
     this.currentCallInfo = callInfo;
@@ -207,6 +223,11 @@ class CallMonitorService {
   // Get the current call info
   getCurrentCall(): CallInfo | null {
     return this.currentCallInfo;
+  }
+  
+  // Check if using direct audio - needed for AudioAnalysis page
+  isUsingDirectAudio(): boolean {
+    return this.currentCallInfo?.usingDirectAudio ?? false;
   }
 }
 
