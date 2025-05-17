@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Record, Recording, StopCircle } from 'lucide-react';
+import { Mic, StopCircle } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 
 interface AudioRecorderProps {
@@ -74,7 +74,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplete }) =>
   return (
     <div className="flex flex-col items-center gap-4">
       <div className="flex items-center justify-center w-16 h-16 bg-guardian-blue/10 rounded-full">
-        <Recording className={`text-guardian-blue ${isRecording ? 'animate-pulse' : ''}`} size={32} />
+        <Mic className={`text-guardian-blue ${isRecording ? 'animate-pulse' : ''}`} size={32} />
       </div>
       
       {isRecording ? (
@@ -92,7 +92,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onRecordingComplete }) =>
             onClick={startRecording} 
             className="flex items-center gap-2 bg-guardian-blue hover:bg-guardian-blue/80"
           >
-            <Record size={20} />
+            <Mic size={20} />
             Start Recording
           </Button>
         ) : (

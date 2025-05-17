@@ -40,11 +40,15 @@ const AudioAnalysis: React.FC = () => {
         phoneNumber: 'Manual Analysis'
       });
       
-      toast({
-        title: result.isDeepfake ? "Deepfake Detected!" : "Voice Authentic",
-        description: `Confidence: ${result.confidence.toFixed(0)}%`,
-        variant: result.isDeepfake ? "destructive" : "default",
-      });
+      if (result.isDeepfake) {
+        toast.error("Deepfake Detected!", {
+          description: `Confidence: ${result.confidence.toFixed(0)}%`
+        });
+      } else {
+        toast.success("Voice Authentic", {
+          description: `Confidence: ${result.confidence.toFixed(0)}%`
+        });
+      }
       
     } catch (error) {
       console.error('Error analyzing audio:', error);
