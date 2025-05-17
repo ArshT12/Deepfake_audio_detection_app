@@ -15,10 +15,13 @@ class BackgroundService {
     
     // Initialize event listeners for background task events
     if (this.isAvailable) {
-      BackgroundRunner.addListener('backgroundEvent', (info) => {
-        console.log('Background event received:', info);
+      // Use the correct event listener pattern for BackgroundRunner
+      // The plugin doesn't have addListener but uses addEventListener
+      document.addEventListener('backgroundEvent', (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('Background event received:', customEvent.detail);
         
-        if (info.event === 'heartbeat') {
+        if (customEvent.detail?.event === 'heartbeat') {
           console.log('Background service is active, heartbeat received');
         }
       });
