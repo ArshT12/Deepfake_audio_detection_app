@@ -43,6 +43,7 @@ const Stack = createNativeStackNavigator();
 const MainTabs = () => {
   return (
     <Tab.Navigator
+      id="MainTabNavigator"
       screenOptions={{
         tabBarActiveTintColor: '#9b87f5',
         tabBarInactiveTintColor: '#8E9196',
@@ -87,7 +88,10 @@ const App = () => {
     <SafeAreaProvider>
       <AppProvider>
         <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Navigator
+            id="RootStackNavigator"
+            screenOptions={{ headerShown: false }}
+          >
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="NotFound" component={NotFound} />
           </Stack.Navigator>

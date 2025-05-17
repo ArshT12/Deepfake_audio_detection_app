@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking } from 'react-native';
 import { useApp } from '../contexts/AppContext';
@@ -121,7 +120,7 @@ const AudioAnalysis: React.FC = () => {
       // Add listener for call events
       callMonitorService.addCallListener(handleCallEvent);
       
-      // Add listener for audio analysis results
+      // Add listener for audio analysis results - updated to match the CallInfo type
       callMonitorService.addAnalysisListener(handleAnalysisResult);
     };
     
@@ -172,7 +171,8 @@ const AudioAnalysis: React.FC = () => {
     }
   };
 
-  const handleAnalysisResult = (result: { isDeepfake: boolean, confidence: number, audioSample?: string }) => {
+  // Updated to match the expected CallInfo type
+  const handleAnalysisResult = (result: CallInfo) => {
     console.log('Audio analysis result:', result);
     
     setDetectionResult({
@@ -278,9 +278,13 @@ const AudioAnalysis: React.FC = () => {
         : Math.floor(65 + Math.random() * 30); // Variable confidence for authentic (65-95%)
       
       handleAnalysisResult({
+        id: Date.now().toString(),
+        phoneNumber: 'Demo Call',
+        timestamp: Date.now(),
+        callType: 'incoming',
         isDeepfake,
         confidence: mockConfidence
-      });
+      } as CallInfo);
     }, 2000);
   };
 

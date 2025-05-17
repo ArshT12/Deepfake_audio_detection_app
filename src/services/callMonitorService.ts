@@ -10,8 +10,8 @@ export interface CallInfo {
   state?: CallState;
   usingDirectAudio?: boolean;
   isIncoming?: boolean;
-  isDeepfake?: boolean;
-  confidence?: number;
+  isDeepfake: boolean; // Changed from optional to required
+  confidence: number;  // Changed from optional to required
   audioSample?: string;
 }
 
@@ -212,7 +212,9 @@ class CallMonitorService {
       callType: Math.random() > 0.5 ? 'incoming' : 'outgoing',
       state: CallState.RINGING,
       usingDirectAudio: Math.random() > 0.5,
-      isIncoming: Math.random() > 0.5
+      isIncoming: Math.random() > 0.5,
+      isDeepfake: false, // Default value to satisfy the required property
+      confidence: 0      // Default value to satisfy the required property
     };
     
     this.currentCallInfo = callInfo;
