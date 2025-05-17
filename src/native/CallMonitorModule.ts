@@ -1,5 +1,5 @@
 
-// Web-compatible implementation of the call monitor
+import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
 
 // Call state constants
 export enum CallState {
@@ -16,21 +16,43 @@ export interface CallInfo {
   state: CallState;
 }
 
+// Get the native module if available
+const NativeCallMonitorModule = Platform.select({
+  android: NativeModules.CallMonitorModule,
+  ios: NativeModules.CallMonitorModule,
+  default: null,
+});
+
+// Create event emitter for native events
+const callEventEmitter = NativeCallMonitorModule 
+  ? new NativeEventEmitter(NativeCallMonitorModule)
+  : null;
+
 /**
- * JavaScript interface for call monitoring (web implementation)
+ * JavaScript interface for call monitoring
  */
 class CallMonitor {
   private isInitialized = false;
   private isMonitoring = false;
   private callListeners: ((callInfo: CallInfo) => void)[] = [];
-  private simulatedCallInterval: number | null = null;
+  private simulatedCallInterval: NodeJS.Timeout | null = null;
+  private eventSubscription: any = null;
 
   /**
    * Check if call monitoring is available on this device
    */
   async isAvailable(): Promise<boolean> {
-    // In web environment, we'll simulate call monitoring
-    return true;
+    if (!NativeCallMonitorModule) {
+      console.log('Call monitoring not available on this platform');
+      return false;
+    }
+    
+    try {
+      return await NativeCallMonitorModule.isAvailable();
+    } catch (error) {
+      console.error('Error checking call monitoring availability:', error);
+      return false;
+    }
   }
 
   /**
@@ -38,14 +60,15 @@ class CallMonitor {
    * @returns true if permissions granted, false otherwise
    */
   async requestPermissions(): Promise<boolean> {
+    if (!NativeCallMonitorModule) {
+      console.log('Call monitoring not available on this platform');
+      return false;
+    }
+    
     try {
-      // For web, we'll request microphone permission as a proxy
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Stop the stream right away, we just needed permission
-      stream.getTracks().forEach(track => track.stop());
-      return true;
+      return await NativeCallMonitorModule.requestPermissions();
     } catch (error) {
-      console.error('Error requesting audio permissions:', error);
+      console.error('Error requesting call monitoring permissions:', error);
       return false;
     }
   }
@@ -55,12 +78,36 @@ class CallMonitor {
    */
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
-    this.isInitialized = true;
-    return true;
+    
+    if (!NativeCallMonitorModule) {
+      console.log('Using simulation mode since native module is not available');
+      this.isInitialized = true;
+      return true;
+    }
+    
+    try {
+      const result = await NativeCallMonitorModule.initialize();
+      
+      // Set up event listener for call state changes
+      if (callEventEmitter && !this.eventSubscription) {
+        this.eventSubscription = callEventEmitter.addListener(
+          'CallStateChanged',
+          (callInfo: CallInfo) => {
+            this.callListeners.forEach(listener => listener(callInfo));
+          }
+        );
+      }
+      
+      this.isInitialized = result;
+      return result;
+    } catch (error) {
+      console.error('Error initializing call monitor:', error);
+      return false;
+    }
   }
 
   /**
-   * Start monitoring calls (simulated in web environment)
+   * Start monitoring calls
    */
   async startMonitoring(): Promise<boolean> {
     if (!this.isInitialized) {
@@ -70,17 +117,22 @@ class CallMonitor {
 
     if (this.isMonitoring) return true;
 
-    try {
-      // In web environment, we'll occasionally simulate incoming calls
-      this.simulatedCallInterval = window.setInterval(() => {
-        // 5% chance of simulating a call every 60 seconds
+    if (!NativeCallMonitorModule) {
+      // In simulation mode, start occasional demo calls
+      this.simulatedCallInterval = setInterval(() => {
         if (Math.random() < 0.05) {
           this.startDemoCall();
         }
-      }, 60000); // Check every minute
+      }, 60000);
       
       this.isMonitoring = true;
       return true;
+    }
+    
+    try {
+      const result = await NativeCallMonitorModule.startMonitoring();
+      this.isMonitoring = result;
+      return result;
     } catch (error) {
       console.error('Error starting call monitoring:', error);
       return false;
@@ -93,14 +145,20 @@ class CallMonitor {
   async stopMonitoring(): Promise<boolean> {
     if (!this.isMonitoring) return true;
 
-    try {
-      if (this.simulatedCallInterval !== null) {
+    if (!NativeCallMonitorModule) {
+      if (this.simulatedCallInterval) {
         clearInterval(this.simulatedCallInterval);
         this.simulatedCallInterval = null;
       }
       
       this.isMonitoring = false;
       return true;
+    }
+    
+    try {
+      const result = await NativeCallMonitorModule.stopMonitoring();
+      this.isMonitoring = false;
+      return result;
     } catch (error) {
       console.error('Error stopping call monitoring:', error);
       return false;
@@ -169,11 +227,38 @@ class CallMonitor {
   }
 
   /**
-   * End a call (simulated in web environment)
+   * End a call (if supported by the platform)
    */
   async endCall(): Promise<boolean> {
-    console.log('Simulated ending call in web environment');
-    return true;
+    if (!NativeCallMonitorModule) {
+      console.log('Simulated ending call');
+      return true;
+    }
+    
+    try {
+      return await NativeCallMonitorModule.endCall();
+    } catch (error) {
+      console.error('Error ending call:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clean up resources when component unmounts
+   */
+  cleanup() {
+    if (this.eventSubscription) {
+      this.eventSubscription.remove();
+      this.eventSubscription = null;
+    }
+    
+    if (this.simulatedCallInterval) {
+      clearInterval(this.simulatedCallInterval);
+      this.simulatedCallInterval = null;
+    }
+    
+    this.stopMonitoring();
+    this.callListeners = [];
   }
 }
 

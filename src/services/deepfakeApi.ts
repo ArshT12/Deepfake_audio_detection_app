@@ -1,5 +1,7 @@
 
 import axios from 'axios';
+import { Platform } from 'react-native';
+import RNFS from 'react-native-fs';
 
 const API_URL = 'https://huggingface.co/spaces/ArshTandon/deepfake-detection-api';
 
@@ -12,20 +14,23 @@ export type DetectionResult = {
 export const deepfakeApi = {
   /**
    * Send audio file to the Hugging Face API for deepfake detection
-   * @param audioPath - Audio file for analysis (File object or Blob)
+   * @param audioPath - Path to audio file for analysis
    * @returns Detection result with confidence score
    */
-  async detectAudio(audioFile: File | Blob): Promise<DetectionResult> {
+  async detectAudio(audioPath: string): Promise<DetectionResult> {
     try {
       // Create form data for API request
       const formData = new FormData();
       
-      // If it's a File object, use it directly, otherwise create a new File from the Blob
-      const file = audioFile instanceof File 
-        ? audioFile 
-        : new File([audioFile], 'audio.wav', { type: 'audio/wav' });
+      // Get file name from path
+      const fileName = audioPath.split('/').pop() || 'audio.wav';
       
-      formData.append('audio', file);
+      // Add file to form data
+      formData.append('audio', {
+        uri: Platform.OS === 'android' ? `file://${audioPath}` : audioPath,
+        type: 'audio/wav',
+        name: fileName
+      } as any);
 
       // Make the API call
       const response = await axios.post(API_URL, formData, {
@@ -76,12 +81,18 @@ export const deepfakeApi = {
   },
   
   /**
-   * Convert recorded audio blob to a URL for web preview
-   * @param audioData - Audio data as Blob
-   * @returns URL to access the audio
+   * Save audio recording to file system
+   * @param audioBlob - Audio data as a base64 string
+   * @returns Path to saved audio file
    */
-  saveAudioFile(audioData: Blob): string {
-    // Create a URL for the blob that can be used in an audio element
-    return URL.createObjectURL(audioData);
+  async saveAudioFile(audioBase64: string): Promise<string> {
+    try {
+      const filePath = `${RNFS.CachesDirectoryPath}/audio_${Date.now()}.wav`;
+      await RNFS.writeFile(filePath, audioBase64, 'base64');
+      return filePath;
+    } catch (error) {
+      console.error('Error saving audio file:', error);
+      throw error;
+    }
   }
 };

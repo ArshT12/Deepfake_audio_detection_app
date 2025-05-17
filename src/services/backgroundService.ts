@@ -1,56 +1,34 @@
 
-import { BackgroundRunner } from '@capacitor/background-runner';
-import { Capacitor } from '@capacitor/core';
+import { AppState, AppStateStatus, Platform } from 'react-native';
+import { callMonitorModule } from '../native/CallMonitorModule';
 
 /**
  * Service for managing background tasks for call monitoring
  */
 class BackgroundService {
-  private isAvailable: boolean;
   private isRunning: boolean = false;
-  
-  constructor() {
-    // Check if we're on a native platform and background runner is available
-    this.isAvailable = Capacitor.isNativePlatform();
-    
-    // Initialize event listeners for background task events
-    if (this.isAvailable) {
-      // Use the correct event listener pattern for BackgroundRunner
-      // The plugin doesn't have addListener but uses addEventListener
-      document.addEventListener('backgroundEvent', (event: Event) => {
-        const customEvent = event as CustomEvent;
-        console.log('Background event received:', customEvent.detail);
-        
-        if (customEvent.detail?.event === 'heartbeat') {
-          console.log('Background service is active, heartbeat received');
-        }
-      });
-    }
-  }
+  private appStateSubscription: any = null;
   
   /**
    * Start background call monitoring service
    */
   async startBackgroundMonitoring(): Promise<boolean> {
-    if (!this.isAvailable) {
-      console.log('Background services not available in web environment');
-      return false;
-    }
-    
     if (this.isRunning) {
       console.log('Background monitoring is already running');
       return true;
     }
     
     try {
-      // Start the background monitoring service
-      await BackgroundRunner.dispatchEvent({
-        label: 'com.voiceguardian.monitoring',
-        event: 'start',
-        details: {
-          timestamp: new Date().toISOString()
-        }
-      });
+      // Start native call monitoring
+      const started = await callMonitorModule.startMonitoring();
+      
+      if (!started) {
+        console.error('Failed to start call monitoring');
+        return false;
+      }
+      
+      // Set up app state listener to handle app going to background
+      this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
       
       this.isRunning = true;
       console.log('Background call monitoring service started');
@@ -62,21 +40,33 @@ class BackgroundService {
   }
   
   /**
+   * Handle app state changes (foreground/background)
+   */
+  private handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (nextAppState === 'active') {
+      console.log('App has come to the foreground');
+      // Optionally refresh monitoring when app comes back to foreground
+    } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+      console.log('App has gone to the background');
+      // Handle background state if needed
+    }
+  };
+  
+  /**
    * Stop background call monitoring service
    */
   async stopBackgroundMonitoring(): Promise<boolean> {
-    if (!this.isAvailable || !this.isRunning) {
+    if (!this.isRunning) {
       return false;
     }
     
     try {
-      await BackgroundRunner.dispatchEvent({
-        label: 'com.voiceguardian.monitoring',
-        event: 'stop',
-        details: {
-          timestamp: new Date().toISOString()
-        }
-      });
+      await callMonitorModule.stopMonitoring();
+      
+      if (this.appStateSubscription) {
+        this.appStateSubscription.remove();
+        this.appStateSubscription = null;
+      }
       
       this.isRunning = false;
       console.log('Background call monitoring service stopped');
@@ -97,8 +87,8 @@ class BackgroundService {
   /**
    * Check if background services are available on this device
    */
-  areBackgroundServicesAvailable(): boolean {
-    return this.isAvailable;
+  async areBackgroundServicesAvailable(): Promise<boolean> {
+    return Platform.OS === 'android' || Platform.OS === 'ios';
   }
 }
 

@@ -1,22 +1,14 @@
 
-import { Capacitor } from '@capacitor/core';
-
-// Type definitions for our call monitoring service
-export interface CallInfo {
-  phoneNumber: string;
-  isIncoming: boolean;
-  timestamp: number;
-}
+import { callMonitorModule, CallInfo } from '../native/CallMonitorModule';
+import { Alert, Vibration } from 'react-native';
 
 /**
  * Service for monitoring phone calls on mobile devices
- * Platform-specific implementations will be injected via Capacitor
  */
 class CallMonitorService {
   private listeners: ((callInfo: CallInfo) => void)[] = [];
   private isInitialized = false;
   private isMonitoring = false;
-  private simulationMode = !Capacitor.isNativePlatform();
 
   /**
    * Initialize the call monitoring service, requesting necessary permissions
@@ -24,25 +16,55 @@ class CallMonitorService {
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
     
-    if (this.simulationMode) {
-      console.log('Call Monitor running in simulation mode (no native platform detected)');
-      this.isInitialized = true;
-      return true;
-    }
-    
     try {
-      // In a real implementation, this would interact with a Capacitor plugin
-      // to request call monitoring permissions from the OS
-      console.log('Initializing call monitoring service');
+      // Check if call monitoring is available
+      const isAvailable = await callMonitorModule.isAvailable();
       
-      // Simulated successful initialization for now
-      this.isInitialized = true;
-      return true;
+      if (!isAvailable) {
+        console.log('Call monitoring is not available on this device');
+        // We'll still set initialized to true so we can use the simulated mode
+        this.isInitialized = true;
+        return true;
+      }
+      
+      // Request needed permissions
+      const hasPermissions = await callMonitorModule.requestPermissions();
+      
+      if (!hasPermissions) {
+        console.log('Call monitoring permissions were denied');
+        Alert.alert(
+          'Permissions Required',
+          'Voice Guardian Shield needs call monitoring permissions to detect deepfakes during calls.',
+          [
+            { text: 'OK' }
+          ]
+        );
+        return false;
+      }
+      
+      // Initialize the native module
+      const initialized = await callMonitorModule.initialize();
+      
+      // Set up call listener
+      callMonitorModule.addCallListener(this.handleCallEvent);
+      
+      this.isInitialized = initialized;
+      return initialized;
     } catch (error) {
       console.error('Failed to initialize call monitoring service:', error);
       return false;
     }
   }
+  
+  /**
+   * Handle incoming call events from the native module
+   */
+  private handleCallEvent = (callInfo: CallInfo) => {
+    console.log('Call event received:', callInfo);
+    
+    // Notify all registered listeners
+    this.notifyCallEvent(callInfo);
+  };
   
   /**
    * Start monitoring calls
@@ -56,16 +78,9 @@ class CallMonitorService {
     if (this.isMonitoring) return true;
     
     try {
-      if (this.simulationMode) {
-        console.log('Started call monitoring (simulation mode)');
-        this.isMonitoring = true;
-        return true;
-      }
-      
-      // In a real implementation, this would activate the native call monitoring
-      console.log('Started call monitoring');
-      this.isMonitoring = true;
-      return true;
+      const result = await callMonitorModule.startMonitoring();
+      this.isMonitoring = result;
+      return result;
     } catch (error) {
       console.error('Failed to start call monitoring:', error);
       return false;
@@ -79,14 +94,7 @@ class CallMonitorService {
     if (!this.isMonitoring) return;
     
     try {
-      if (this.simulationMode) {
-        console.log('Stopped call monitoring (simulation mode)');
-        this.isMonitoring = false;
-        return;
-      }
-      
-      // In a real implementation, this would deactivate the native call monitoring
-      console.log('Stopped call monitoring');
+      await callMonitorModule.stopMonitoring();
       this.isMonitoring = false;
     } catch (error) {
       console.error('Failed to stop call monitoring:', error);
@@ -109,7 +117,6 @@ class CallMonitorService {
   
   /**
    * Notify all listeners of a call event
-   * This is used internally and by the demo mode
    */
   notifyCallEvent(callInfo: CallInfo): void {
     this.listeners.forEach(listener => listener(callInfo));
@@ -129,18 +136,21 @@ class CallMonitorService {
   
   /**
    * Start a simulated call for demo purposes
-   * This will trigger a random call event with 70% chance of being authentic
    */
   startDemoCall(): CallInfo {
-    const phoneNumber = this.generateAustralianPhoneNumber();
-    const callInfo: CallInfo = {
-      phoneNumber,
-      isIncoming: Math.random() > 0.3, // 70% chance of incoming call
-      timestamp: Date.now()
-    };
-    
-    this.notifyCallEvent(callInfo);
-    return callInfo;
+    return callMonitorModule.startDemoCall();
+  }
+  
+  /**
+   * End the current call
+   */
+  async endCall(): Promise<boolean> {
+    try {
+      return await callMonitorModule.endCall();
+    } catch (error) {
+      console.error('Error ending call:', error);
+      return false;
+    }
   }
 }
 
