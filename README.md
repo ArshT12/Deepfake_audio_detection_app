@@ -3,92 +3,55 @@
 
 Voice Guardian Shield is a mobile application designed to protect users from deepfake voice scams by analyzing voice calls in real-time and alerting users when a deepfake voice is detected.
 
-## Table of Contents
+## App Structure
 
-1. [Core Features](#core-features)
-2. [How It Works](#how-it-works)
-3. [Technical Architecture](#technical-architecture)
-4. [Services](#services)
-5. [Usage Guide](#usage-guide)
-6. [Setup & Development](#setup--development)
+### 1. Main Components
 
-## Core Features
+- **Audio Analysis (Home Page)**
+  - Real-time call monitoring
+  - Call simulation demo
+  - Audio recording and analysis
+  - File upload and analysis
+
+- **Dashboard**
+  - Protection statistics
+  - Detection history
+
+- **Settings**
+  - Call monitoring options
+  - Detection sensitivity settings
+  - Data management
+
+### 2. Core Services
+
+- **Deepfake Detection API** (`src/services/deepfakeApi.ts`)
+  - Communicates with Hugging Face AI model
+  - Analyzes audio for synthetic voices
+  - Provides detection confidence scores
+
+- **Call Monitor Service** (`src/services/callMonitorService.ts`)
+  - Detects and monitors phone calls
+  - Provides simulated calls for demo purposes
+  - Passes audio for analysis
+
+- **Background Service** (`src/services/backgroundService.ts`)
+  - Enables background operation
+  - Maintains monitoring when app is not in focus
+
+### 3. Key Features
 
 - **Real-time Call Monitoring**: Analyzes ongoing calls for deepfake voices
-- **Manual Audio Analysis**: Upload or record audio for deepfake detection
+- **Manual Audio Analysis**: Upload or record audio for detection
 - **Call Demo**: Test the deepfake detection with simulated calls
-- **Detection History**: View and manage your past detection records
-- **Configurable Settings**: Customize detection thresholds and behaviors
+- **Detection History**: View and manage past detection records
+- **Configurable Settings**: Customize detection thresholds
 
-## How It Works
+### 4. State Management
 
-Voice Guardian Shield uses advanced audio analysis to detect synthetic or AI-generated voices that might indicate a scam attempt:
-
-1. **Call Monitoring**: When enabled, the app uses your device's microphone to analyze the audio from incoming and outgoing calls. This happens locally on your device for privacy.
-
-2. **Deepfake Detection**: The app analyzes audio samples using our AI model to determine if the voice is authentic or synthetic. The analysis generates a confidence score.
-
-3. **Alert System**: If a deepfake is detected, you'll receive immediate alerts based on your settings.
-
-4. **Protective Actions**: You can configure the app to automatically end calls when a deepfake is detected, providing an extra layer of protection.
-
-## Technical Architecture
-
-The application is built with the following technologies:
-
-- **React & TypeScript**: For the main application interface
-- **Capacitor**: For accessing native mobile features like call detection
-- **Tailwind CSS & Shadcn UI**: For responsive design
-- **Background Services**: For continuous monitoring even when the app is not in focus
-
-## Services
-
-### Deepfake API
-
-Located in `src/services/deepfakeApi.ts`, this service handles the communication with the Hugging Face AI model that analyzes audio for deepfake detection. It sends audio files to the API and processes the response.
-
-Key features:
-- Sends audio files to Hugging Face API
-- Processes API responses into usable detection results
-- Includes fallback handling for API failures
-
-### Call Monitor Service
-
-Located in `src/services/callMonitorService.ts`, this service manages phone call detection and monitoring.
-
-Key features:
-- Monitors for incoming/outgoing calls
-- Provides simulated call functionality for demo purposes
-- Notifies the app when calls are detected
-
-### Background Service
-
-Located in `src/services/backgroundService.ts`, this service manages background tasks to ensure call monitoring works even when the app is not in focus.
-
-Key features:
-- Manages background tasks via Capacitor's Background Runner
-- Sends heartbeat signals to ensure service is running
-- Communicates between background processes and the main app
-
-## Usage Guide
-
-### Home Screen (Audio Analysis)
-
-- **Call Monitoring Toggle**: Enable or disable real-time call monitoring
-- **Monitor Tab**: Test the detection with a simulated call
-- **Record Tab**: Record your own audio for analysis
-- **Upload Tab**: Analyze audio files from your device
-
-### Dashboard
-
-- **Protection Statistics**: View summary of your call analysis data
-- **Recent Detections**: Browse through your detection history
-
-### Settings
-
-- **Call Monitoring**: Configure how the app responds to deepfakes
-- **Detection Settings**: Adjust sensitivity and analysis duration
-- **Data Management**: Clear your detection history
+The app uses React Context (`AppContext`) to manage:
+- Detection history records
+- User settings
+- Monitoring state
 
 ## Setup & Development
 
@@ -125,8 +88,10 @@ npx cap sync
 npx cap open android
 ```
 
-## Technical Notes
+## Technical Stack
 
-- The app uses a simulated detection in demo mode when the AI API is unavailable
-- Call monitoring requires microphone permissions
-- Background monitoring is platform-specific and uses native capabilities where available
+- **Frontend**: React, TypeScript, Tailwind CSS
+- **Mobile Framework**: Capacitor
+- **UI Components**: Shadcn UI
+- **State Management**: Context API and React Query
+- **AI Integration**: Hugging Face API
