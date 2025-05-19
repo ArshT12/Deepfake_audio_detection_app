@@ -1,4 +1,3 @@
-
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
@@ -8,12 +7,18 @@ const config: CapacitorConfig = {
   server: {
     cleartext: true
   },
+  ios: {
+    minVersion: '14.0'  // Required for background-runner
+  },
   plugins: {
     BackgroundRunner: {
       label: 'com.voiceguardian.monitoring',
       src: 'background.js',
       event: 'start',
-      autoStart: true
+      autoStart: true,
+      ios: {
+        cpuLimitInSeconds: 600  // 10 min (maximum allowed on iOS)
+      }
     },
     Permissions: {
       phone: true,

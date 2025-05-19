@@ -1,24 +1,38 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# macOS
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+._*
+*.swp
+.AppleDouble
+.LSOverride
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# iOS
+ios/App/App/public/
+ios/App/Pods/
+ios/App/App/build/
+ios/App/build/
+ios/*.xcuserdatad
+ios/App/Podfile.lock
+ios/App/*.xcworkspace
+xcuserdata/
+DerivedData/
+
+# Android
+android/app/build/
+android/build/
+android/captures/
+android/gradle/
+android/local.properties
+android/.gradle/
+android/.idea/
+android/capacitor-cordova-android-plugins/
+
+# Build
+dist/
+build/
+www/
+
